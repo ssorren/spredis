@@ -1,2 +1,2 @@
-# spredis
-Node/Redis based CloudSearch Alternative
+# swoosh
+Redis based CloudSearch Alternative
