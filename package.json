@@ -1,13 +1,17 @@
 {
   "name": "spredis",
-  "version": "1.0.0",
-  "description": "Fast redis Search engine",
+  "version": "0.0.1",
+  "description": "Fast redis Search engine, (pre-alpha)",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "sal sorrentino <sal.sorrentino74@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/salsorrentino/spredis.git"
+  },
   "dependencies": {
     "combine": "^0.1.4",
     "diacritics": "^1.3.0",
@@ -19,8 +23,7 @@
     "stream-combiner": "^0.2.2",
     "string-hash": "^1.1.3",
     "through": "^2.3.8",
-    "uuid": "^3.1.0",
-    "wait.for-es6": "^0.1.0"
+    "uuid": "^3.1.0"
   },
   "devDependencies": {}
 }
