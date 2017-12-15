@@ -2,7 +2,7 @@
 local list,set,item = KEYS[1],KEYS[2],1
 -- redis.call('SADD', KEYS[2], unpack(redis.call('LRANGE', KEYS[1], 0, -1)))
 repeat
-    item = redis.call('lpop', list)
+    items = redis.call('lpop', list)
     if (item) then redis.call('sadd', set, item) end
 until not item
 
