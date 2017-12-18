@@ -37,5 +37,5 @@ if #intestores then
 	redis.call('DEL', unpack(interstores))
 end
 
-return 1;
+return count;
 
