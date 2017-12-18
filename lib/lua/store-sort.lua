@@ -21,6 +21,7 @@ if currentScore ~= false then
 	redis.call('ZADD', finalSort, currentScore, id)	
 	return 0
 end
+
 local lex = '('..value
 local prevValue,nextValue,prevScore,nextScore
 local before = tonumber(redis.call('ZLEXCOUNT', allValuesKey, '-', lex))
