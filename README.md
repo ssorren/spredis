@@ -50,7 +50,8 @@ Running 1000 queries consecutively (single client)...
 ## What's being worked on now
 Here's the list of items that need to be completed to get out of pre-alpha phase
 
-* Smarter indexing of documents (only indexing fields that have changed)
+* ~~Prefix/Suffix searching for text and literal fields~~
+* ~~Smarter indexing of documents (only indexing fields that have changed)~~
 * Automatic re-indexing after namespace config change
 * Implmentation of facets for non-literal (rank based) fields
 * Thorough examples and documentation
