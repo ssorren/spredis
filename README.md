@@ -11,26 +11,26 @@ Inital testing is extremely promising. The test database we're using has about 2
 Here are the results we're curently seeing:
 Running 100 queries concurrently (single client)...
 ```
-Ran 100 queries in 183ms (TCP)
-  		Average query prep time:            0.89ms (5 max)
-  		Average query exec time:            3.3ms (10 max)
-  		Average respone serialization time: 0.91ms (4 max)
-  		Overhead cost:                      -327ms (-3.27ms/query)
-  		Speed (incl. overhead):             546 queries/sec (1.83ms/query)
-  		Found (incl. overhead):             4300 records (23497/sec)
-  		Returned (incl. overhead):          1825 records (9973/sec)
+Ran 100 queries in 162ms (TCP)
+  Average query prep time:            0.6ms (3 max)
+  Average query exec time:            3.31ms (12 max)
+  Average respone serialization time: 0.8ms (2 max)
+  Overhead cost:                      -309ms (-3.09ms/query)
+  Speed (incl. overhead):             617 queries/sec (1.62ms/query)
+  Found (incl. overhead):             4375 records (27006/sec)
+  Returned (incl. overhead):          1825 records (11265/sec)
 ```
 
 Running 1,000 queries consecutively (single client)...
 ```
-Ran 1000 queries in 4901ms (TCP)
-  		Average query prep time:            0.681ms (9 max)
-  		Average query exec time:            1.731ms (7 max)
-  		Average respone serialization time: 0.713ms (5 max)
-  		Overhead cost:                      1776ms (1.776ms/query)
-  		Speed (incl. overhead):             204 queries/sec (4.901ms/query)
-  		Found (incl. overhead):             43000 records (8774/sec)
-  		Returned (incl. overhead):          18250 records (3724/sec)
+Ran 1000 queries in 4731ms (TCP)
+  Average query prep time:            0.46ms (4 max)
+  Average query exec time:            1.881ms (7 max)
+  Average respone serialization time: 0.685ms (5 max)
+  Overhead cost:                      1705ms (1.705ms/query)
+  Speed (incl. overhead):             211 queries/sec (4.731ms/query)
+  Found (incl. overhead):             43750 records (9248/sec)
+  Returned (incl. overhead):          18250 records (3858/sec)
 ```
 > query prep time = query parsing and index planning
 > 
