@@ -14,24 +14,18 @@ for i=1,numKeys do
     table.insert(orders, ARGV[i + numKeys])
 end
 
--- print(1)
 local current_multiplier = 1
 local current_divisor = 1
--- print(1.1)
+
 local command = {'ZINTERSTORE', dest, tostring(numKeys + 1)}
--- print(command)
+
 local colCommand = {source}
 local weightCommand = {'WEIGHTS', 0}
--- print(2)
--- print(table.concat(command, ' '))
--- print(table.concat(columns, ' '))
--- print(table.concat(orders, ' '))
+
 for i,column in ipairs(columns) do
     local order = orders[i]
-    -- print(table.concat(redis.call('ZRANGE', column, 0, 0, 'WITHSCORES'), ',' ))
-    -- print(redis.call('ZRANGE', column, 0, 0, 'WITHSCORES')[1])
+    
     local low = math.abs(redis.call('ZRANGE', column, 0, 0, 'WITHSCORES')[2]);
-    -- print(low)
     local high = math.abs(redis.call('ZRANGE', column, -1, -1, 'WITHSCORES')[2]);
     table.insert(colCommand, column)
     if order == 'ASC' then 
@@ -58,4 +52,3 @@ for i,v in ipairs(weightCommand) do
 end
 
 return redis.call(unpack(command));
--- print(table.concat(command, ' '));
