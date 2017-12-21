@@ -6,16 +6,16 @@ Currently in pre-alpha phase. Check back soon for more.
 Will be looking for collaborators soon.
 
 ## Initial Testing Results
-Inital testing is extremely promising. The test database we're using has about 250k complex documents based on a real-world production use case. The memory foortprint in Redis is about 2GB (index and document data). Scaling up to millions of documents should just be a function of memory. The test queries include a combination of **free text, literal values, geo radius  and number/date ranges, multi-column sorting and faceted results and distance calculation**. The redis setup for the follwing tests is a single redis node runnning v4.
+Inital testing is extremely promising. The test database we're using has about 250k (~744MB of JSON data) complex documents based on a real-world production use case. The memory foortprint in Redis is ~1.3GB (index and document data). Scaling up to millions of documents should just be a function of memory. The test queries include a combination of **free text, literal values, geo radius  and number/date ranges, multi-column sorting and faceted results and distance calculation**. The redis setup for the follwing tests is a single redis node runnning v4.
 
 Here are the results we're curently seeing:
 Running 100 queries concurrently (single client)...
 ```
 Ran 100 queries in 162ms (TCP)
-  Average query prep time:            0.6ms (3 max)
-  Average query exec time:            3.31ms (12 max)
-  Average respone serialization time: 0.8ms (2 max)
-  Overhead cost:                      -309ms (-3.09ms/query)
+  Average query prep time:            0.45ms (1 max)
+  Average query exec time:            2.75ms (9 max)
+  Average respone serialization time: 1.04ms (3 max)
+  Overhead cost:                      -262ms (-2.62ms/query)
   Speed (incl. overhead):             617 queries/sec (1.62ms/query)
   Found (incl. overhead):             4375 records (27006/sec)
   Returned (incl. overhead):          1825 records (11265/sec)
@@ -23,14 +23,14 @@ Ran 100 queries in 162ms (TCP)
 
 Running 1,000 queries consecutively (single client)...
 ```
-Ran 1000 queries in 4731ms (TCP)
-  Average query prep time:            0.46ms (4 max)
-  Average query exec time:            1.881ms (7 max)
-  Average respone serialization time: 0.685ms (5 max)
-  Overhead cost:                      1705ms (1.705ms/query)
-  Speed (incl. overhead):             211 queries/sec (4.731ms/query)
-  Found (incl. overhead):             43750 records (9248/sec)
-  Returned (incl. overhead):          18250 records (3858/sec)
+Ran 1000 queries in 4829ms (TCP)
+  Average query prep time:            0.476ms (3 max)
+  Average query exec time:            1.712ms (6 max)
+  Average respone serialization time: 0.79ms (4 max)
+  Overhead cost:                      1851ms (1.851ms/query)
+  Speed (incl. overhead):             207 queries/sec (4.829ms/query)
+  Found (incl. overhead):             43750 records (9060/sec)
+  Returned (incl. overhead):          18250 records (3779/sec)
 ```
 > query prep time = query parsing and index planning
 > 
