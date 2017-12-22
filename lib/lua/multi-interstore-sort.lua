@@ -24,9 +24,9 @@ local weightCommand = {'WEIGHTS', 0}
 
 for i,column in ipairs(columns) do
     local order = orders[i]
-    
-    local low = math.abs(redis.call('ZRANGE', column, 0, 0, 'WITHSCORES')[2]);
-    local high = math.abs(redis.call('ZRANGE', column, -1, -1, 'WITHSCORES')[2]);
+    -- ignore infinite results for purposes of sorting
+    local low = math.abs(redis.call('ZRANGEBYSCORE', column, '(-inf', '(+inf', 'WITHSCORES', 'LIMIT', 0 ,1)[2]);
+    local high = math.abs(redis.call('ZREVRANGEBYSCORE', column, '(+inf', '(-inf', 'WITHSCORES', 'LIMIT', 0 ,1)[2]);
     table.insert(colCommand, column)
     if order == 'ASC' then 
         table.insert(weightCommand, current_multiplier)

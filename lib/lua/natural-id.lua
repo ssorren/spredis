@@ -7,12 +7,12 @@ local a = redis.call('LPOP', avail)
 
 
 if a then
-	redis.call('HSET', map, a, id)
+	redis.call('HSET', map, id, a)
 	return a
 end
 
 a = redis.call('INCR', incr)
 
-redis.call('HSET', map, a, id)
+redis.call('HSET', map, id, a)
 return a
 
