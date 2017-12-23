@@ -6,7 +6,6 @@ local tempStore = '__XX:SPREDIS:DOC:TEMP:XX__';
 redis.call('SORT', tosort, 'BY', 'nosort', 'GET', '#', 'LIMIT', start, stop, 'STORE', tempStore)
 
 local val = redis.call('LPOP', tempStore);
-
 while val do
 	if setstore then 
 		redis.call('SADD', setstore, val)

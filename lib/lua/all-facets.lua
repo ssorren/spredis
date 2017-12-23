@@ -1,13 +1,18 @@
-local source,facets,flen,facetCount = KEYS[1],{},#ARGV,#ARGV/5
+local source,ensuredZSet,facets,flen,facetCount = KEYS[1],KEYS[2],{},#ARGV,#ARGV/5
 local t = redis.call('TYPE', source)
 t = t.ok or t
 -- print(t)
 local set = nil;
-if t == 'zset' then 
-	set = redis.call('ZRANGE', source, 0, -1)
-else
-	set = redis.call('SMEMBERS', source)
+
+if t == 'set' then
+	source = ensuredZSet
 end
+
+-- if t == 'zset' then 
+set = redis.call('ZRANGE', source, 0, -1)
+-- else
+-- 	set = redis.call('SMEMBERS', source)
+-- end
 
 -- local facetKeys = {}
 for i=1,flen,5 do
@@ -65,5 +70,7 @@ for k=1,facetCount do
 	table.insert(results, redis.call(zrange, facet.store, 0, facet.count, 'WITHSCORES'))
 end
 -- print(#results)
+
+
 return results
 

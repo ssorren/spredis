@@ -5,6 +5,15 @@ local orders = {}
 -- print(KEYS[1])
 -- print(source)
 -- print(dest)
+local sourceType = redis.call('TYPE', source)
+-- sourceType = sourceType.ok or sourceType
+-- print(sourceType)
+-- if sourceType == 'set' then
+--     print('doing a set')
+-- --     redis.call('ZINTERSTORE', facetTemp, 1, source)
+-- --     source = facetTemp
+--     source = enseredZset
+-- end
 
 for i=1,numKeys do
     table.insert(columns, ARGV[i])
