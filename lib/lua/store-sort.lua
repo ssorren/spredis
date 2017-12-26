@@ -1,3 +1,5 @@
+-- redis.replicate_commands()
+-- redis.set_repl(redis.ALL)
 local allValuesKey = KEYS[1]
 local finalSort = KEYS[2]
 

@@ -1,3 +1,5 @@
+-- redis.replicate_commands()
+-- redis.set_repl(redis.REPL_NONE)
 local index,key,value = KEYS[1],KEYS[2],ARGV[1]
 -- print(1)
 -- print(value)
@@ -18,7 +20,7 @@ local range = redis.call('ZRANGEBYLEX', index, start, stop)
 -- print(#range)
 local len,v = #range,nil
 for i=1,len do
-	v = string.match(range[i], ':(.+)')
+	v = string.match(range[i], ':([^:]+)')
 	if v then
 		redis.call('SADD', key, v)
 	end

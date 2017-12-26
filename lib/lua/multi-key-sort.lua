@@ -1,3 +1,5 @@
+-- redis.replicate_commands()
+-- redis.set_repl(redis.REPL_NONE)
 -- note: this only works is each column value has a fixed string length. 
 -- also, the id must be the last column sent, 
 -- numKeys must include the id field in the count

@@ -1,3 +1,5 @@
+-- redis.replicate_commands()
+-- redis.set_repl(redis.REPL_NONE)
 redis.call('ZINTERSTORE', KEYS[1], 2, KEYS[2], KEYS[3], 'WEIGHTS', 0, 1)
 
 -- print(KEYS[2])

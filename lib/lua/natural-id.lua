@@ -1,3 +1,5 @@
+-- redis.replicate_commands()
+-- redis.set_repl(redis.ALL)
 local incrKey,map,avail,id = KEYS[1],KEYS[2],KEYS[3],ARGV[1]
 
 local a = redis.call('HGET', map, id);

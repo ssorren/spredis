@@ -1,3 +1,5 @@
+-- redis.replicate_commands()
+-- redis.set_repl(redis.REPL_NONE)
 local dest = KEYS[1]
 local source = KEYS[2]
 

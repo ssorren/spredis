@@ -1,4 +1,5 @@
-
+-- redis.replicate_commands()
+-- redis.set_repl(redis.REPL_NONE)
 local source,temp = KEYS[1],KEYS[2]
 local t = redis.call('TYPE',source)
 t = t.ok or t

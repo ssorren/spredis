@@ -1,4 +1,5 @@
-
+-- redis.replicate_commands()
+-- redis.set_repl(redis.REPL_NONE)
 local list,set,item = KEYS[1],KEYS[2],1
 -- redis.call('SADD', KEYS[2], unpack(redis.call('LRANGE', KEYS[1], 0, -1)))
 -- print(list)

@@ -1,3 +1,5 @@
+-- redis.replicate_commands()
+-- redis.set_repl(redis.ALL)
 local list,set,src,score = KEYS[1],KEYS[2],KEYS[3],0
 
 local val = redis.call('LPOP', list);

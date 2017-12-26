@@ -1,3 +1,5 @@
+-- redis.replicate_commands()
+-- redis.set_repl(redis.REPL_NONE)
 local numKeys,source,dest = tonumber(KEYS[3]),KEYS[1],KEYS[2]
 local columns = {}
 local orders = {}

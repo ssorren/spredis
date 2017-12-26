@@ -1,3 +1,6 @@
+-- redis.replicate_commands()
+-- redis.set_repl(redis.REPL_NONE)
+
 local source,ensuredZSet,facets,flen,facetCount = KEYS[1],KEYS[2],{},#ARGV,#ARGV/5
 local t = redis.call('TYPE', source)
 t = t.ok or t

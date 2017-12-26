@@ -1,3 +1,5 @@
+-- redis.replicate_commands()
+-- redis.set_repl(redis.REPL_NONE)
 local key,count,hasZSet,t,setArgs = KEYS[1],tonumber(KEYS[2]),false,nil,{}
 
 for i=1,count do

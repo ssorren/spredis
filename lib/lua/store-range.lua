@@ -1,26 +1,38 @@
-local range = redis.call('ZRANGEBYSCORE', KEYS[1], ARGV[1], ARGV[2])
+-- redis.replicate_commands()
+-- redis.set_repl(redis.REPL_NONE)
+local source,store,hint,hintStore = KEYS[1],KEYS[2],KEYS[3],KEYS[4]
 
-local key = KEYS[2]
-local len = #range
-for i=1,len do
-	redis.call('SADD', key, range[i])
+
+-- print(source,store,hint,hintStore)
+-- print(hint == '')
+local preHint = false;
+if hint and #hint > 0 then 
+	-- print('have hint')
+	local hintCard = tonumber(redis.call('scard', hint)) or 0
+	-- print(hintCard)
+	if hintCard < 5000 then -- low cardinality hint
+		preHint = true
+		redis.call('zinterstore', hintStore, 2, hint, source, 'WEIGHTS', 0, 1)
+		source = hintStore
+	end
 end
 
+local range = redis.call('ZRANGEBYSCORE', source, ARGV[1], ARGV[2])
 
+local len = #range
 
--- local function inverse(val) 
--- 	if val == '+inf' then return '-inf' end
--- 	if val == '-inf' then return '+inf' end
--- 	return '('..tostring(val)
+-- print(len);
+for i=1,len do
+	redis.call('SADD', store, range[i])
+end
+
+if hint and preHint == false then
+	len = redis.call('sinterstore', hintStore, store, hint)
+	redis.call('rename', hintStore, store)
+end
+
+-- if #range > 0 then
+-- 	redis.call('SADD', KEYS[2], unpack(range))
 -- end
-
--- redis.call('ZINTERSTORE', key, 1, KEYS[1], 'WEIGHTS', 1);
-
--- if ARGV[2] == '+inf' then 
--- 	redis.call('ZREMRANGEBYSCORE', key, '-inf', inverse(ARGV[1]))
--- elseif ARGV[1] == '-inf' then
--- 	redis.call('ZREMRANGEBYSCORE', key, inverse(ARGV[2]), '+inf')
--- end
-
 
 return len
