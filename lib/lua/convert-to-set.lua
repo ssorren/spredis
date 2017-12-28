@@ -1,6 +1,6 @@
 -- redis.replicate_commands()
 -- redis.set_repl(redis.REPL_NONE)
-local list,set,item = KEYS[1],KEYS[2],1
+local list,set,tempPrefix,item = KEYS[1],KEYS[2],KEYS[3],1
 -- redis.call('SADD', KEYS[2], unpack(redis.call('LRANGE', KEYS[1], 0, -1)))
 -- print(list)
 local t = redis.call('TYPE',list)
@@ -20,7 +20,10 @@ elseif t == 'zset' then
 		redis.call('SADD', set, res[i])
 	end
 elseif t == 'set' then
-	redis.call('RENAME', list, set)
+	if string.sub(list,1,string.len(tempPrefix))==tempPrefix then
+		redis.call('RENAME', list, set)
+	else
+		redis.call('SINTERSTORE', set, list);
+	end
 end
-
 return 1

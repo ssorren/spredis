@@ -12,8 +12,8 @@ if hint and #hint > 0 then
 		source = hintStore
 	end
 end
-
-local range = redis.call('zrangebyscore', source, ARGV[1], ARGV[2])
+-- pipe.georadius(indexName, query.from[1], query.from[0], query.radius, query.unit, 'STORE', store);
+local range = redis.call('georadius', source, ARGV[1], ARGV[2], ARGV[3], ARGV[4])
 
 local len = #range
 
