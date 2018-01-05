@@ -7,7 +7,7 @@ for i=1,count do
 	t = t.ok or t
 	table.insert(setArgs, ARGV[i]) -- need to ignore weights
 	if t == 'zset' then
-		print(ARGV[i])
+		-- print(ARGV[i])
 		hasZSet = true
 		break
 	end

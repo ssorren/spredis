@@ -64,3 +64,7 @@ dev
 package-lock.json
 
 .npmrc
+
+*.o
+*.xo
+*.so

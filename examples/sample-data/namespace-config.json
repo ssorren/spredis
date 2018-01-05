@@ -1,0 +1,35 @@
+{
+	"name": "auctions",
+	"prefix": "V:A",
+	"defaultLang": "en",
+	"fields": {
+		"active": {"type": "boolean", "sort":true, "defaultValue":0},
+		"isAppraisal": {"type": "boolean", "facet":true},
+		"year": {"type":"smallinteger", "sort":true},
+		"make": {"type":"literal", "sort":true, "facet":true},
+		"model": {"type":"literal", "sort":true, "facet":true},
+		"trim": {"type":"literal", "index":false},
+		"odometer": {"type":"integer", "sort":true},
+		"odometerUnit": {"type":"literal", "sort":true},
+		"startDate": {"type": "date", "sort":true},
+		"endDate": {"type": "date", "sort":true},
+		"startPrice": {"type":"number", "sort":true},
+		"reservePrice": {"type":"number", "sort":true},
+		"buyNowPrice": {"type":"number", "sort":true},
+		"currentBid": {"type":"number", "sort":true},
+		"networks": {"type":"literal", "array":true},
+		"network": {"type":"literal", "sort":false, "facet":false, "defaultValue":"Public"},
+		"consignorId": {"type": "integer", "sort":false},
+		"consignorCompanyName": {"type":"literal", "sort":true, "facet":true},
+		"vin": {"type":"literal", "sort":true, "facet":false},
+		"ymmt": {"type": "text", "source":"year,make,model,trim"},
+		"winner": {"type": "integer", "sort":false},
+		"hasWinner": {"type": "boolean", "source":"winner"},
+		"coords": {"type": "geo"}
+	},
+	"compounds": {
+		"auction": {"fields":["networks","active", "isAppraisal", "hasWinner"], "rank":"startDate"},
+		"inventory": {"fields":["network","active", "isAppraisal", "hasWinner"], "rank":"endDate"},
+		"appraisal": {"fields":["active", "isAppraisal", "hasWinner"]}
+	}
+}

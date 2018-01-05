@@ -3,9 +3,14 @@
 local tosort,hash,start,stop,setstore,res = KEYS[1],KEYS[2],(ARGV[1] or 0),(ARGV[2] or -1),ARGV[3],{}
 local tempStore = '__XX:SPREDIS:DOC:TEMP:XX__';
 
+local t = redis.call('type', tosort);
+t = t.ok or t
 
-
-redis.call('SORT', tosort, 'BY', 'nosort', 'GET', '#', 'LIMIT', start, stop, 'STORE', tempStore)
+if t ~= 'list' then
+	redis.call('SORT', tosort, 'BY', 'nosort', 'GET', '#', 'LIMIT', start, stop, 'STORE', tempStore)
+else
+	tempStore = tosort
+end
 
 local val = redis.call('LPOP', tempStore);
 while val do

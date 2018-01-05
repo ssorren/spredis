@@ -14,7 +14,7 @@ local res = redis.call('ZRANGEBYLEX', lexSet, min, max)
 -- local command,weights,len = {'ZUNIONSTORE', store, #res},{'WEIGHTS'},#res
 
 
-local command,len = {'SUNIONSTORE', store},#res
+local command,len = {'ZUNIONSTORE', store, #res},#res
 local sets,interstores = {},{}
 
 for i=1,len do
@@ -29,7 +29,7 @@ if hint then
 		local iname = '_XX:SPREDIS:TEMP:INTER:'..tostring(i)
 		-- printType(sets[i])
 		-- local count = redis.call('ZINTERSTORE', iname, 2, hint, sets[i], 'WEIGHTS', 0, 0)
-		local count = redis.call('SINTERSTORE', iname, hint, sets[i])
+		local count = redis.call('ZINTERSTORE', iname, 2, hint, sets[i])
 		table.insert(interstores, iname)
 	end
 	sets = interstores

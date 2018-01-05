@@ -7,7 +7,7 @@ local orders = {}
 -- print(KEYS[1])
 -- print(source)
 -- print(dest)
-local sourceType = redis.call('TYPE', source)
+-- local sourceType = redis.call('TYPE', source)
 -- sourceType = sourceType.ok or sourceType
 -- print(sourceType)
 -- if sourceType == 'set' then
@@ -24,6 +24,16 @@ end
 for i=1,numKeys do
     table.insert(orders, ARGV[i + numKeys])
 end
+
+local cCommand = {'spredis.sort', source, dest}
+for i=1,numKeys do
+    table.insert(cCommand, ARGV[i])
+    table.insert(cCommand, ARGV[i + numKeys])
+end
+-- print(table.concat(cCommand, ', '))
+
+local cRes = redis.call(unpack(cCommand))
+if true then return cRes end
 
 local current_multiplier = 1
 local current_divisor = 1

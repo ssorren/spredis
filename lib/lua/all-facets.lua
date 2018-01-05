@@ -38,7 +38,7 @@ for i=1,len do
 
 	for k=1,facetCount do
 		facet = facets[k]
-		el = redis.call('HGET', facet.key, set[i])
+		el = redis.call('spredis.hashget', facet.key, set[i])
 		if el then
 			facet.results[el] = (facet.results[el] or 0) + 1
 		end
