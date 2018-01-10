@@ -1,27 +1,16 @@
--- redis.replicate_commands()
--- redis.set_repl(redis.REPL_NONE)
 local tosort,hash,start,stop,setstore,res = KEYS[1],KEYS[2],(ARGV[1] or 0),(ARGV[2] or -1),ARGV[3],{}
-local tempStore = '__XX:SPREDIS:DOC:TEMP:XX__';
 
-local t = redis.call('type', tosort);
-t = t.ok or t
 
-if t ~= 'list' then
-	redis.call('SORT', tosort, 'BY', 'nosort', 'GET', '#', 'LIMIT', start, stop, 'STORE', tempStore)
-else
-	tempStore = tosort
-end
+local ids = redis.call('spredis.getresids', tosort, start, stop);
 
-local val = redis.call('LPOP', tempStore);
-while val do
+local len,val = #ids,nil;
+for i=1,len do
+	val = ids[i]
+	table.insert(res, redis.call('HGET', hash, val))
 	if setstore then 
 		redis.call('SADD', setstore, val)
-	end
-	table.insert(res, redis.call('HGET', hash, val))
-	val = redis.call('LPOP', tempStore);
+	end	
 end
-
-redis.call('DEL', tempStore);
 
 return res;
 

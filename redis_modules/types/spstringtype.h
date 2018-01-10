@@ -2,6 +2,7 @@
 #define __SPREDIS_STRING_HASH
 
 #include "../spredis.h"
+#include <pthread.h>
 
 typedef struct _SpredisSMap_t {
 	char full;
@@ -12,10 +13,14 @@ typedef struct _SpredisSMap_t {
 typedef struct _SpredisSMapCont {
 	unsigned long size;
 	unsigned long valueCount;
+	pthread_rwlock_t mutex;
+	// pthread_rwlock_t bigLock;
 	SpredisSMap_t *map;
 } SpredisSMapCont;
 
-char *SpredisSMapValue(SpredisSMapCont *map, unsigned long id);
+#define SpredisSMapValue(cont, id) (id < cont->size && cont->map[id].full ? cont->map[id].value : NULL)
+
+// char *SpredisSMapValue(SpredisSMapCont *map, unsigned long id);
 void SpredisSHashRDBSave(RedisModuleIO *io, void *ptr);
 void SpredisSHashRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value);
 void *SpredisSHashRDBLoad(RedisModuleIO *io, int encver);

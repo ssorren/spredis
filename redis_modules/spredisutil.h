@@ -1,32 +1,40 @@
 #ifndef __SPREDIS_UTIL
 #define __SPREDIS_UTIL
 
+#define SpredisProtectWriteMap(map) pthread_rwlock_wrlock(&map->mutex)
+#define SpredisProtectReadMap(map) pthread_rwlock_rdlock(&map->mutex)
+#define SpredisUnProtectMap(map) pthread_rwlock_unlock(&map->mutex)
+#define SpredisProtectBigWriteMap(map) pthread_rwlock_unlock(&map->bigLock)
+#define SpredisProtectBigReadMap(map) pthread_rwlock_rdlock(&map->bigLock)
+#define SpredisUnProtectBigMap(map) pthread_rwlock_unlock(&map->bigLock)
 
 typedef struct {
     void *left, *right;
     int depth;
-} ks_isort_stack_t;
+} sp_isort_stack_t;
 
 
 #define SPREDIS_SORT_INIT(type, extraType, CompareLT)					\
 					\
-static inline void __ks_##type##_insertsort_Spredis(type* s, type* t, extraType *mcd)					\
+static inline void __ks_##type##_insertsort_Spredis(type** s, type** t, extraType *mcd)					\
 {					\
-    type *i, *j, swap_tmp;    					\
+    type** i;					\
+    type** j;					\
+    type* swap_tmp;					\
     for (i = s + 1; i < t; ++i)					\
         for (j = i; j > s && CompareLT(*j, *(j-1), mcd); --j) {					\
             swap_tmp = *j; *j = *(j-1); *(j-1) = swap_tmp;					\
         }					\
 }					\
 					\
-static inline void ks_##type##_combsort_Spredis(size_t n, type* a, extraType *mcd)					\
+static inline void ks_##type##_combsort_Spredis(size_t n, type** a, extraType *mcd)					\
 {					\
     const double shrink_factor = 1.2473309501039786540366528676643;					\
     int do_swap;					\
     size_t gap = n;					\
-    type tmp;					\
-    type* i;					\
-    type* j;					\
+    type* tmp;					\
+    type** i;					\
+    type** j;					\
     do {					\
         if (gap > 2) {					\
             gap = (size_t)(gap / shrink_factor);					\
@@ -44,12 +52,12 @@ static inline void ks_##type##_combsort_Spredis(size_t n, type* a, extraType *mc
     if (gap != 1) __ks_##type##_insertsort_Spredis(a, a + n, mcd);					\
 }					\
 					\
-static inline void ks_##type##_introsort_Spredis(size_t n, type a[], extraType *mcd)					\
+static inline void ks_##type##_introsort_Spredis(size_t n, type** a, extraType *mcd)					\
 {					\
     int d;					\
-    ks_isort_stack_t *top, *stack;					\
-    type rp, swap_tmp;					\
-    type *s,*t,*i, *j, *k;					\
+    sp_isort_stack_t *top, *stack;					\
+    type *rp, *swap_tmp;					\
+    type **s,**t,**i, **j, **k;					\
 					\
 					\
     if (n < 1) return;					\
@@ -58,7 +66,7 @@ static inline void ks_##type##_introsort_Spredis(size_t n, type a[], extraType *
         return;					\
     }					\
     for (d = 2; 1ul<<d < n; ++d);					\
-    stack = (ks_isort_stack_t*)RedisModule_Alloc(sizeof(ks_isort_stack_t) * ((sizeof(size_t)*d)+2));					\
+    stack = (sp_isort_stack_t*)RedisModule_Alloc(sizeof(sp_isort_stack_t) * ((sizeof(size_t)*d)+2));					\
     top = stack; s = a; t = a + (n-1); d <<= 1;					\
     while (1) {					\
         if (s < t) {					\
@@ -92,12 +100,12 @@ static inline void ks_##type##_introsort_Spredis(size_t n, type a[], extraType *
                 RedisModule_Free(stack);					\
                 __ks_##type##_insertsort_Spredis(a, a+n, mcd);					\
                 return;					\
-            } else { --top; s = (type*)top->left; t = (type*)top->right; d = top->depth; }					\
+            } else { --top; s = (type**)top->left; t = (type**)top->right; d = top->depth; }					\
         }					\
     }					\
 }					\
 					\
-void Spredis##type##Sort(size_t n, type *a, extraType *mcd) {					\
+void Spredis##type##Sort(size_t n, type **a, extraType *mcd) {					\
 	ks_##type##_introsort_Spredis(n, a, mcd);					\
 }					\
 					\

@@ -3,9 +3,19 @@
 
 #include "../spredis.h"
 
+typedef struct _SpredisTempResult {
+	size_t size;
+	SpredisSortData **data;
+} SpredisTempResult;
+
 void SpredisTMPResDBSave(RedisModuleIO *io, void *ptr);
 void SpredisTMPResRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value);
 void *SpredisTMPResRDBLoad(RedisModuleIO *io, int encver);
 void SpredisTMPResFreeCallback(void *value);
 
+int SpredisTMPResGetIds_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+
+SpredisTempResult *SpredisTempResultCreate(RedisModuleCtx *ctx, RedisModuleString *keyName, size_t size);
+
+void SpredisTempResultModuleInit();
 #endif

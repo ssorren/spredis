@@ -2,17 +2,21 @@
 #define __SPREDIS_DOUBLE_HASH
 
 #include "../spredis.h"
-
+#include <pthread.h>
 typedef struct _SpredisDMap_t {
 	char full;
 	double value;
 } SpredisDMap_t;
 
+// pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 typedef struct _SpredisDMapCont {
 	unsigned long size;
 	unsigned long valueCount;
+	pthread_rwlock_t mutex;
+	// pthread_rwlock_t bigLock;
 	SpredisDMap_t *map;
 } SpredisDMapCont;
+
 
 double SpredisDMapValue(SpredisDMapCont *map, unsigned long id);
 void SpredisDHashRDBSave(RedisModuleIO *io, void *ptr);

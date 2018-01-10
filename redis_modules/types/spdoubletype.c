@@ -1,13 +1,19 @@
 #include <math.h>
 #include "../spredis.h"
 
+
+
+
 static inline int _SpredisResizeDMap(SpredisDMapCont * cont, unsigned long id) {
+
     if (id >= cont->size) {
+        SpredisProtectWriteMap(cont);
         id += 1024; //create some breathing room so we're not constantly reallocing
         cont->map = RedisModule_Realloc(cont->map, sizeof(SpredisDMap_t) * id);
         if (cont->map == NULL) return REDISMODULE_ERR;
         for (int i = cont->size; i < id; ++i) cont->map[i].full = 0;
         cont->size = id;
+        SpredisUnProtectMap(cont);
     }
     return REDISMODULE_OK;
 };
@@ -16,13 +22,17 @@ void * _SpredisInitDMap() {
     SpredisDMapCont *dhash = RedisModule_Alloc(sizeof(SpredisDMapCont));
     dhash->size = 0;
     dhash->valueCount = 0;
+    // dhash->mutex = PTHREAD_MUTEX_INITIALIZER;
     dhash->map = RedisModule_Alloc(sizeof(SpredisDMap_t));
     dhash->map[0].full = 0;
     dhash->map[0].value = 0;
+    pthread_rwlock_init ( &dhash->mutex,NULL );
+    // pthread_rwlock_init ( &dhash->bigLock,NULL );
     return dhash;
 }
 
 int _SpredisSetDMapValue(SpredisDMapCont *dhash, unsigned long id, double value) {
+    SpredisProtectWriteMap(dhash);
     if (_SpredisResizeDMap(dhash, id) != REDISMODULE_OK) {
         return REDISMODULE_ERR;
         // return RedisModule_ReplyWithError(ctx, "ERR could not allocate space, probably OOM");
@@ -32,6 +42,7 @@ int _SpredisSetDMapValue(SpredisDMapCont *dhash, unsigned long id, double value)
     }
     dhash->map[id].full = 1;
     dhash->map[id].value = value;
+    SpredisUnProtectMap(dhash);
     return REDISMODULE_OK;
 }
 
@@ -77,7 +88,11 @@ void SpredisDHashFreeCallback(void *value) {
     // DHash_t *dhash = (DHash_t *) value;
     // kh_destroy(SPREDISD, dhash);
     SpredisDMapCont *dhash = value;
+    SpredisProtectWriteMap(dhash);
     RedisModule_Free(dhash->map);
+    SpredisUnProtectMap(dhash);
+    pthread_rwlock_destroy(&dhash->mutex);
+    // pthread_rwlock_destroy(&dhash->bigLock);
     RedisModule_Free(dhash);
 }
 

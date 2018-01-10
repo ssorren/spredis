@@ -3,10 +3,9 @@
 
 #include "../spredis.h"
 
-
 typedef struct SpredisSortData {
   int id;
-  RedisModuleString *key;
+  // char *key;
   double *scores;
 } SpredisSortData;
 
@@ -26,7 +25,7 @@ typedef struct SpredisColumnData {
 
 // int SpredisMergeSortZset(RedisModuleCtx *ctx, RedisModuleKey *key, unsigned int count, SpredisColumnData *mcd, long long replyStart, long long replyCount, RedisModuleString *dest);
 // int SpredisFetchColumnsAndOrders(RedisModuleCtx *ctx, RedisModuleString **argv, SpredisColumnData *mcd, int argOffset);
-
+void SpredisZsetMultiKeySortInit();
 int SpredisZsetMultiKeySort_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int SpredisStoreLexRange_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int SpredisStoreRangeByScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);

@@ -177,16 +177,16 @@ typedef khint_t khiter_t;
 #endif
 
 #ifndef kcalloc
-#define kcalloc(N,Z) calloc(N,Z)
+#define kcalloc(N,Z) RedisModule_Calloc(N,Z)
 #endif
 #ifndef kmalloc
-#define kmalloc(Z) malloc(Z)
+#define kmalloc(Z) RedisModule_Alloc(Z)
 #endif
 #ifndef krealloc
-#define krealloc(P,Z) realloc(P,Z)
+#define krealloc(P,Z) RedisModule_Realloc(P,Z)
 #endif
 #ifndef kfree
-#define kfree(P) free(P)
+#define kfree(P) RedisModule_Free(P)
 #endif
 
 static const double __ac_HASH_UPPER = 0.77;
@@ -481,7 +481,6 @@ static kh_inline khint_t __ac_Wang_hash(khint_t key)
   @return       Iterator to the found element, or kh_end(h) if the element is absent [khint_t]
  */
 #define kh_get(name, h, k) kh_get_##name(h, k)
-
 /*! @function
   @abstract     Remove a key from the hash table.
   @param  name  Name of the hash table [symbol]
@@ -563,6 +562,22 @@ static kh_inline khint_t __ac_Wang_hash(khint_t key)
 		code;												\
 	} }
 
+#define kh_contains(name, h, vvar) (kh_get_##name(h, vvar) != (h)->n_buckets)
+// #define kh_get(name, h, k) 
+// #define kh_exist(h, x) 
+/*! @function
+  @abstract     Iterate over the entries in the hash table
+  @param  h     Pointer to the hash table [khash_t(name)*]
+  @param  kvar  Variable to which key will be assigned
+  @param  code  Block of code to execute
+ */
+#define kh_foreach_key(h, kvar, code) { khint_t __i;		\
+	for (__i = kh_begin(h); __i != kh_end(h); ++__i) {		\
+		if (!kh_exist(h,__i)) continue;						\
+		(kvar) = kh_key(h,__i);								\
+		code;												\
+	} }
+ 
 /*! @function
   @abstract     Iterate over the values in the hash table
   @param  h     Pointer to the hash table [khash_t(name)*]

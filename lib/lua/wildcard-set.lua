@@ -14,7 +14,9 @@ local res = redis.call('ZRANGEBYLEX', lexSet, min, max)
 -- local command,weights,len = {'ZUNIONSTORE', store, #res},{'WEIGHTS'},#res
 
 
-local command,len = {'ZUNIONSTORE', store, #res},#res
+-- local command,len = {'ZUNIONSTORE', store, #res},#res
+
+local command,len = {'spredis.stunionstore', store},#res
 local sets,interstores = {},{}
 
 for i=1,len do
@@ -23,29 +25,33 @@ for i=1,len do
 	table.insert(sets, keyPattern..s)
 	-- table.insert(weights, 0)
 end
+-- print(table.concat(sets, ', '))
 
-if hint then
+if #hint > 0 then
+	-- print('have hint')
 	for i=1,len do
 		local iname = '_XX:SPREDIS:TEMP:INTER:'..tostring(i)
-		-- printType(sets[i])
-		-- local count = redis.call('ZINTERSTORE', iname, 2, hint, sets[i], 'WEIGHTS', 0, 0)
-		local count = redis.call('ZINTERSTORE', iname, 2, hint, sets[i])
+		local count = redis.pcall('spredis.stinterstore', iname, hint, sets[i])
+
+		-- print(count)
 		table.insert(interstores, iname)
 	end
 	sets = interstores
 end
 
+
 for i,v in ipairs(sets) do
 	table.insert(command, v)
 end
 
-
+-- print('command:')
+-- print(table.concat(command, ', '))
 -- for i,v in ipairs(weights) do
 -- 	table.insert(command, v)
 -- end
 
-local count = redis.call(unpack(command))
-
+local count = redis.pcall(unpack(command))
+-- print(count)
 if #intestores then
 	redis.call('DEL', unpack(interstores))
 end
