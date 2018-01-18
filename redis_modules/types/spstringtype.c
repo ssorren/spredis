@@ -39,6 +39,8 @@ int _SpredisSetSMapValue(SpredisSMapCont *dhash, unsigned long id, const char* v
     }
     if (dhash->map[id].full == 0) {
         ++dhash->valueCount;
+    } else {
+        RedisModule_Free(dhash->map[id].value);    
     }
     dhash->map[id].full = 1;
     dhash->map[id].value = RedisModule_Strdup(value);

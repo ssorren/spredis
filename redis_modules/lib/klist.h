@@ -60,7 +60,7 @@
 		--mp->cnt;														\
 		if (mp->n == mp->max) {											\
 			mp->max = mp->max? mp->max<<1 : 16;							\
-			mp->buf = realloc(mp->buf, sizeof(kmptype_t *) * mp->max);	\
+			mp->buf = RedisModule_Realloc(mp->buf, sizeof(kmptype_t *) * mp->max);	\
 		}																\
 		mp->buf[mp->n++] = p;											\
 	}

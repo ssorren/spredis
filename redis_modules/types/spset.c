@@ -1,6 +1,9 @@
-#include "spredis.h"
+#include "../spredis.h"
+
+KHASH_SET_INIT_INT(SIDS);
 
 void * _SpredisInitSet() {
+
     SpredisSetCont *cont = RedisModule_Alloc(sizeof(SpredisSetCont));
     pthread_rwlock_init ( &(cont->mutex),NULL );
     // pthread_rwlock_init ( &(cont->bigLock),NULL );
@@ -9,9 +12,10 @@ void * _SpredisInitSet() {
 }
 
 
-void _SpredisDestroySet(SpredisSetCont *dhash) {
+void _SpredisDestroySet(void *value) {
+    SpredisSetCont *dhash = value;
 	SpredisProtectWriteMap(dhash);
-    kh_destroy(SIDS, dhash->set);
+    if (dhash->set != NULL) kh_destroy(SIDS, dhash->set);
     SpredisUnProtectMap(dhash);
     pthread_rwlock_destroy(&dhash->mutex);
     // pthread_rwlock_destroy(&dhash->bigLock);
@@ -25,7 +29,7 @@ void SpredisSetRDBSave(RedisModuleIO *io, void *ptr) {
     uint32_t id;
     kh_foreach_key(dhash->set, id, {
     	RedisModule_SaveUnsigned(io, id);
-    })
+    });
 }
 
 
@@ -60,6 +64,12 @@ void *SpredisSetRDBLoad(RedisModuleIO *io, int encver) {
     return dhash;
 }
 
+void SpredisSetFreeCallback(void *value) {
+    if (value == NULL) return;
+    // SP_LAZY_DELETE_CALL(_SpredisDestroySet, value);
+    // SpredisSetCont *dhash = value;
+    _SpredisDestroySet(value);
+}
 
 static inline int SpredisSetLenCompareLT(SpredisSetCont *a, SpredisSetCont *b, void *mcd) {
     return kh_size(a->set) < kh_size(b->set);
@@ -154,10 +164,10 @@ SpredisSetCont *SpredisSDifference(SpredisSetCont **cas, int count) {
 	while (j) {
 		SpredisUnProtectMap(cas[--j]);
 	}
-	if (kh_size(product) == 0) {
-		_SpredisDestroySet(res);
-		return NULL;
-	}
+	// if (kh_size(product) == 0) {
+	// 	_SpredisDestroySet(res);
+	// 	return NULL;
+	// }
 	return res;
 }
 
@@ -179,10 +189,10 @@ SpredisSetCont *SpredisSUnion(SpredisSetCont **cas, int count) {
 		    SpredisUnProtectMap(a);
 		}
 	}
-	if (kh_size(product) == 0) {
-		_SpredisDestroySet(res);
-		return NULL;
-	}
+	// if (kh_size(product) == 0) {
+	// 	_SpredisDestroySet(res);
+	// 	return NULL;
+	// }
 	return res;
 }
 
@@ -205,23 +215,15 @@ SpredisSetCont *SpredisSAddAll(SpredisSetCont **cas, int count) {
             SpredisUnProtectMap(a);
         }
     }
-    if (kh_size(product) == 0) {
-        _SpredisDestroySet(res);
-        return NULL;
-    }
+    // if (kh_size(product) == 0) {
+    //     _SpredisDestroySet(res);
+    //     return NULL;
+    // }
     return res;
 }
 
-
-void SpredisSetFreeCallback(void *value) {
-	if (value == NULL) return;
-    SpredisSetCont *dhash = value;
-
-    _SpredisDestroySet(dhash);
-}
-
 int SpredisSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    // RedisModule_AutoMemory(ctx);
+    RedisModule_AutoMemory(ctx);
     if (argc < 3) return RedisModule_WrongArity(ctx);
     int argOffset = 2;
     // if ( ((argc - argOffset) % 2) != 0 ) return RedisModule_WrongArity(ctx);
@@ -230,7 +232,7 @@ int SpredisSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     int argIndex = argOffset;
     // printf("%s\n", "WTF1");
     RedisModuleKey *key = RedisModule_OpenKey(ctx,argv[1],
-            REDISMODULE_WRITE|REDISMODULE_READ);
+            REDISMODULE_WRITE);
     int keyType;
     if (HASH_NOT_EMPTY_AND_WRONGTYPE(key, &keyType, SPSETTYPE) != 0) {
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);   
@@ -243,22 +245,21 @@ int SpredisSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     } else {
         dhash = RedisModule_ModuleTypeGetValue(key);
     }
+    RedisModule_CloseKey(key);
     // printf("%s\n", "WTF3");
     // SpredisDHash *d;
+    SpredisProtectWriteMap(dhash);
     for (int i = 0; i < keyCount; ++i)
     {
         /* code */
         uint32_t id = TOINTID(argv[argIndex++],16);
         int absent;
-
-        SpredisProtectWriteMap(dhash);
         kh_put(SIDS, dhash->set, id, &absent);
-        SpredisUnProtectMap(dhash);
         setCount += absent;
     }
+    SpredisUnProtectMap(dhash);
    // printf("%s\n", "WTF4");
-    /* if we've aleady seen this id, just set the score */
-    RedisModule_CloseKey(key);
+    
     RedisModule_ReplyWithLongLong(ctx, setCount);
     RedisModule_ReplicateVerbatim(ctx);
     // printf("%s\n", "WTF5");

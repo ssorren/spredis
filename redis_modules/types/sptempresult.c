@@ -1,6 +1,11 @@
 #include "../spredis.h"
 #include <inttypes.h>
 
+void __SPFreeSortData(SpredisSortData *sd) {
+    if ((sd)->scores != NULL) RedisModule_Free((sd)->scores);
+    RedisModule_Free(sd);
+}
+
 void SpredisTMPResDBSave(RedisModuleIO *io, void *ptr) {
 	//we are not replicating these values
 }
@@ -18,17 +23,23 @@ void *SpredisTMPResRDBLoad(RedisModuleIO *io, int encver) {
 void SpredisTempResultModuleInit() {
 };
 
+void _SpredisDestroyTmpResult(void *value) {
+    SpredisTempResult *tr = value;
+    
+    SpredisSortData *sd;
+    for (int i = 0; i < tr->size; ++i)
+    {
+        sd = tr->data[i];
+        if (sd != NULL && sd->scores != NULL) RedisModule_Free(sd->scores);
+        RedisModule_Free(sd);
+    }
+    if (tr->data != NULL) RedisModule_Free(tr->data);
+    RedisModule_Free(tr);
+}
+
 void SpredisTMPResFreeCallback(void *value) {
-	SpredisTempResult *tr = value;
-	SpredisSortData *sd;
-	for (int i = 0; i < tr->size; ++i)
-	{
-		sd = tr->data[i];
-		if (sd != NULL && sd->scores != NULL) RedisModule_Free(sd->scores);
-		RedisModule_Free(sd);
-	}
-	if (tr->data != NULL) RedisModule_Free(tr->data);
-	RedisModule_Free(tr);
+
+    _SpredisDestroyTmpResult(value);
 }
 
 

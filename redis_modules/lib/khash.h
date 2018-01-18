@@ -197,6 +197,7 @@ static const double __ac_HASH_UPPER = 0.77;
 		khint32_t *flags; \
 		khkey_t *keys; \
 		khval_t *vals; \
+		khval_t head; \
 	} kh_##name##_t;
 
 #define __KHASH_PROTOTYPES(name, khkey_t, khval_t)	 					\
@@ -210,14 +211,15 @@ static const double __ac_HASH_UPPER = 0.77;
 
 #define __KHASH_IMPL(name, SCOPE, khkey_t, khval_t, kh_is_map, __hash_func, __hash_equal) \
 	SCOPE kh_##name##_t *kh_init_##name(void) {							\
-		return (kh_##name##_t*)kcalloc(1, sizeof(kh_##name##_t));		\
+		return  (kh_##name##_t *)kcalloc(1, sizeof(kh_##name##_t)); \
 	}																	\
 	SCOPE void kh_destroy_##name(kh_##name##_t *h)						\
 	{																	\
-		if (h) {														\
-			kfree((void *)h->keys); kfree(h->flags);					\
-			kfree((void *)h->vals);										\
-			kfree(h);													\
+		if (h != NULL) {														\
+			if (h->keys != NULL) kfree(h->keys); \
+			if (h->flags != NULL) kfree(h->flags);					\
+			if (h->vals != NULL) kfree(h->vals);										\
+			;kfree(h);													\
 		}																\
 	}																	\
 	SCOPE void kh_clear_##name(kh_##name##_t *h)						\
@@ -356,11 +358,14 @@ static const double __ac_HASH_UPPER = 0.77;
 
 #define KHASH_DECLARE(name, khkey_t, khval_t)		 					\
 	__KHASH_TYPE(name, khkey_t, khval_t) 								\
-	__KHASH_PROTOTYPES(name, khkey_t, khval_t)
+
+#define KHASH_DECLARE_SET(name, khkey_t)		 					\
+	__KHASH_TYPE(name, khkey_t, char) 								\
+	// __KHASH_PROTOTYPES(name, khkey_t, khval_t)
 
 #define KHASH_INIT2(name, SCOPE, khkey_t, khval_t, kh_is_map, __hash_func, __hash_equal) \
-	__KHASH_TYPE(name, khkey_t, khval_t) 								\
 	__KHASH_IMPL(name, SCOPE, khkey_t, khval_t, kh_is_map, __hash_func, __hash_equal)
+	// __KHASH_TYPE(name, khkey_t, khval_t)
 
 #define KHASH_INIT(name, khkey_t, khval_t, kh_is_map, __hash_func, __hash_equal) \
 	KHASH_INIT2(name, static kh_inline klib_unused, khkey_t, khval_t, kh_is_map, __hash_func, __hash_equal)
@@ -519,6 +524,50 @@ static kh_inline khint_t __ac_Wang_hash(khint_t key)
  */
 #define kh_value(h, x) ((h)->vals[x])
 
+#define kh_put_value(h, x, v) { \
+	((h)->vals[x]) = v; \
+	v->prev = NULL; \
+	if (h->head != NULL) { \
+		h->head->prev = v; \
+		v->next = h->head; \
+	} else { v->next = NULL; }\
+	h->head = v; \
+}
+
+
+#define kh_del_value(h, v, __sp_free__) { \
+	kh_del_##name(h, k); \
+	if (h->head != NULL) { \
+		if (h->head == v) { \
+			h->head = v->next; \
+		} \
+		if (v->next != NULL) { \
+			v->next->prev = v->prev; \
+		} \
+		if (v->prev != NULL) { \
+			v->prev->next = v->next; \
+		} \
+		if (__sp_free__) kfree(v); \
+	} \
+}
+
+
+#define kh_del_key_value(name, h, k, v, __sp_free__) { \
+	kh_del_##name(h, k); \
+	if (h->head != NULL) { \
+		if (h->head == v) { \
+			h->head = v->next; \
+		} \
+		if (v->next != NULL) { \
+			v->next->prev = v->prev; \
+		} \
+		if (v->prev != NULL) { \
+			v->prev->next = v->next; \
+		} \
+		if (__sp_free__) kfree(v); \
+	} \
+}
+
 /*! @function
   @abstract     Get the start iterator
   @param  h     Pointer to the hash table [khash_t(name)*]
@@ -562,6 +611,7 @@ static kh_inline khint_t __ac_Wang_hash(khint_t key)
 		code;												\
 	} }
 
+
 #define kh_contains(name, h, vvar) (kh_get_##name(h, vvar) != (h)->n_buckets)
 // #define kh_get(name, h, k) 
 // #define kh_exist(h, x) 
@@ -584,12 +634,19 @@ static kh_inline khint_t __ac_Wang_hash(khint_t key)
   @param  vvar  Variable to which value will be assigned
   @param  code  Block of code to execute
  */
-#define kh_foreach_value(h, vvar, code) { khint_t __i;		\
-	for (__i = kh_begin(h); __i != kh_end(h); ++__i) {		\
-		if (!kh_exist(h,__i)) continue;						\
-		(vvar) = kh_val(h,__i);								\
-		code;												\
-	} }
+#define kh_foreach_value(h, vvar, code) { \
+	vvar = h->head; \
+    while(vvar != NULL) { \
+    	code; \
+    	vvar = vvar->next; \
+    } \
+}
+
+	// for (__i = kh_begin(h); __i != kh_end(h); ++__i) {		\
+	// 	if (!kh_exist(h,__i)) continue;						\
+	// 	(vvar) = kh_val(h,__i);								\
+	// 	code;												\
+	// } }
 
 /* More conenient interfaces */
 

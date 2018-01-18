@@ -3,11 +3,28 @@
 
 #include "../spredis.h"
 
+
+
+// void __SPFreeSortData(SpredisSortData *sd);
+
+// #define SPKLMEMPOOLFREE(sd) do { \
+// 	if ((sd)->scores != NULL) RedisModule_Free((sd)->scores); \
+//     RedisModule_Free(sd); \
+// } while(0);
+
+// KMEMPOOL_INIT(SORTDATA, SpredisSortData, SPKLMEMPOOLFREE);	
+
+
+// #define SPKLFREE(a) 
+
+// KLIST_INIT(TEMPRES, SpredisSortData*, SPKLFREE);
+
 typedef struct _SpredisTempResult {
 	size_t size;
+	// SpredisSortData **data;
+	// klist_t(TEMPRES) * data;
 	SpredisSortData **data;
 } SpredisTempResult;
-
 void SpredisTMPResDBSave(RedisModuleIO *io, void *ptr);
 void SpredisTMPResRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value);
 void *SpredisTMPResRDBLoad(RedisModuleIO *io, int encver);

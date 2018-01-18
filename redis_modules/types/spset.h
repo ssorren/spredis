@@ -2,6 +2,7 @@
 #define __SPREDIS_SET
 
 #include "../spredis.h"
+#include "spsharedtypes.h"
 
 // typedef struct _SpredisSMap_t {
 // 	char full;
@@ -12,13 +13,16 @@
 // typedef struct SpredisSetCont;
 
 // char *SpredisSMapValue(SpredisSMapCont *map, unsigned long id);
-KHASH_SET_INIT_INT(SIDS)
-;
+// KHASH_DECLARE(SIDS, khint32_t, char)
+
+
+
 typedef struct _SpredisSetCont {
 	khash_t(SIDS) *set;
-
+	// void (*forEachKey)(void*, int*);
+	// void (*forEachKey)(void*, int*);
 	pthread_rwlock_t mutex;
-	pthread_rwlock_t bigLock;
+	// pthread_rwlock_t bigLock;
 } SpredisSetCont;
 
 // void * _SpredisInitSet();
@@ -30,7 +34,7 @@ SpredisSetCont *SpredisSDifference(SpredisSetCont **sets, int count);
 SpredisSetCont *SpredisSUnion(SpredisSetCont **sets, int count);
 
 void * _SpredisInitSet();
-void _SpredisDestroySet(SpredisSetCont *dhash);
+void _SpredisDestroySet(void *dhash);
 void SpredisSetRDBSave(RedisModuleIO *io, void *ptr);
 void SpredisSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value);
 void *SpredisSetRDBLoad(RedisModuleIO *io, int encver);

@@ -1,22 +1,27 @@
+// #pragma GCC diagnostic ignored "-Wunused-function"
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
 #include <float.h>
 #include <math.h>
-// #include "kbtree.h"
-// #include "khash.h"
-#include "mc_khsort.h"
 
 #include "spredis.h" //important that this coes before khash-- defines memory functions
-
-
+#include "lib/ksort.h"
+#include "types/spsharedtypes.h"
 
 
 
 static RedisModuleType **SPREDISMODULE_TYPES; 
 
 
+// static inline int ScoreComp(SPScore a, SPScore b) {
+//     if (a.score < b.score) return -1;
+//     if (b.score < a.score) return 1;
+//     if (a.id < b.id) return -1;
+//     if (b.id < a.id) return 1;
+//     return 0;
+// }
 
 int HASH_NOT_EMPTY_AND_WRONGTYPE(RedisModuleKey *key, int *type, int targetType) {
     int keyType = RedisModule_KeyType(key);
@@ -25,7 +30,11 @@ int HASH_NOT_EMPTY_AND_WRONGTYPE(RedisModuleKey *key, int *type, int targetType)
         RedisModule_ModuleTypeGetType(key) != SPREDISMODULE_TYPES[targetType])
     {
         // printf("Really 2!!!! %d\n", targetType);
-        RedisModule_CloseKey(key);
+        
+
+        //RedisModule_CloseKey(key);
+
+
         return 1;
     }
     return 0;
@@ -48,7 +57,7 @@ int HASH_EMPTY_OR_WRONGTYPE(RedisModuleKey *key, int *type, int targetType) {
     if (keyType == REDISMODULE_KEYTYPE_EMPTY ||
         RedisModule_ModuleTypeGetType(key) != SPREDISMODULE_TYPES[targetType])
     {
-        RedisModule_CloseKey(key);
+        // RedisModule_CloseKey(key);
         return 1;
     }
     return 0;
@@ -65,7 +74,7 @@ int HASH_EMPTY_OR_WRONGTYPE(RedisModuleKey *key, int *type, int targetType) {
 
 // KBTREE_INIT(SPID, size_t, kb_generic_cmp)
 
-// KHASH_SET_INIT_INT(IDS)
+
 
 // typedef struct {
 //     double score;
@@ -81,144 +90,194 @@ int HASH_EMPTY_OR_WRONGTYPE(RedisModuleKey *key, int *type, int targetType) {
 // #define TOSIZE_TKEY(k) (size_t)strtol(RedisModule_StringPtrLen(k,NULL), NULL, 10)
 // #define KB_SMALL_SIZE 64
 
-int SpredisBTREETEST_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+
+int SPSortGeo(SPGeo *a, SPGeo *b) {
+    return ((a->lat > b->lat) - (a->lat < b->lat)) || ((a->lon > b->lon) - (a->lon < b->lon));
+}
+
+int SPSortSore(SPScore *a, SPScore *b) {
+    return (a->score < b->score);
+}
+#define scorelt(a,b) ( (a) < (b) )
+KSORT_INIT(IDSHUFFLE, uint32_t, scorelt)
+// DISTANCE_INIT(Test)
+// s
+KHASH_MAP_INIT_INT(GEO, SPGeo*)
+#define ScorePresortLt(a,b) ((a->score) < (b->score))
+#define GetScore(a) (a->score)
+
+typedef kbtree_t(LEX) kbtree_t(TESTLEX);
+typedef kbtree_t(SCORE) kbtree_t(TESTSCORE);
+typedef khash_t(SCORE) khash_t(TESTSCORE);
+
+
+SPLEX_BTREE_INIT(TESTLEX); 
+SPSCORE_BTREE_INIT(TESTSCORE); 
+
+KHASH_MAP_INIT_INT(TESTSCORE, SPScore*);
+static inline double SPDist(double th1, double ph1, double th2, double ph2)
+{
+    double dx, dy, dz;
+    ph1 -= ph2;
+    ph1 *= 0.017453292519943295, th1 *= 0.017453292519943295, th2 *= 0.017453292519943295;
+ 
+    dz = sin(th1) - sin(th2);
+    dx = cos(ph1) * cos(th1) - cos(th2);
+    dy = sin(ph1) * cos(th1);
+    return asin(sqrt(dx * dx + dy * dy + dz * dz) / 2) * 2 * 6372797.560856;
+}
+
+
+#include "lib/sp_kbtree.h"
+// #define ScoreComp(a,b) (((((b).score) < ((a).score)) - (((a).score) < ((b).score))) || ((((b).id) < ((a).id)) - (((a).id) < ((b).id))))
+
+// KBTREE_INIT(SCORES, SPScore, SPScoreComp)
+// SPSCORE_BTREE_INIT(TEST_SCORES)
+// SPREDIS_SORT_INIT(SCORESORT, SPScore*, SPSortSore)
+
+
+int SpredisTEST_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // printf("Getting %d\n", TOINTKEY(argv[2]));
-    // RedisModule_AutoMemory(ctx);
+    RedisModule_AutoMemory(ctx);
     
-    // // kbtree_t(SPID) *ids = kb_init(SPID, KB_SMALL_SIZE);
+
+    double slat = 41.48518796577633;
+    double slon = -87.5162054198453;
+    double radius = 500 * 1000;
+
     
-    // uint32_t count = TOSIZE_TKEY(argv[1]);
-    // uint32_t *a = RedisModule_PoolAlloc(ctx, sizeof(size_t) * count);
-    // // size_t *d = RedisModule_PoolAlloc(ctx, sizeof(double) * count);
-    // uint32_t i;
-    // for (i = 0; i < count; ++i) {
-    //     a[i] = i * 10;
-    // }
-    
-    // // SPZSetItem *p, *t;
+    long long startTimer = RedisModule_Milliseconds();
+    RedisModuleCallReply *reply;
+        reply = RedisModule_Call(ctx,"georadius","sccscc", argv[1], "-87.5162054198453", "41.48518796577633", argv[2], "km", "WITHCOORD");
+     
+    if (RedisModule_CallReplyType(reply) == REDISMODULE_REPLY_ERROR) {
+        return RedisModule_ReplyWithCallReply(ctx, reply);
+    }
 
-    // khash_t(IDS) *scores;
-    // khint_t k;
-    // scores = kh_init(IDS);
-    // int absent;
-    // // size_t *p;
-    // // kbtree_t(SPID) *scores = kb_init(SPID, 512);
-    // ks_shuffle(IDS, count, a);
-    // long long startTimer = RedisModule_Milliseconds();
-    // for (i = 0; i < count; ++i) {
-    //     k = kh_put(IDS, scores, a[i], &absent);
-    //     // kb_put(SPID, scores, a[i]);
-    //     // if (absent) {
-    //     //     kh_value(scores, k) = RedisModule_Strdup("test");
-    //     // }
-    // }
-    // RedisModule_ReplyWithArray(ctx, 5 * 2);
+    RedisModule_ReplyWithArray(ctx, 14);
+    RedisModule_ReplyWithSimpleString(ctx, "ZSearch took:");
+    RedisModule_ReplyWithLongLong(ctx, RedisModule_Milliseconds() - startTimer);
 
-    // RedisModule_ReplyWithSimpleString(ctx, "populate");
-    // RedisModule_ReplyWithLongLong(ctx, RedisModule_Milliseconds() - startTimer);
-    // startTimer = RedisModule_Milliseconds();
+    size_t reply_len = RedisModule_CallReplyLength(reply);
+    SPGeo **allCoords = RedisModule_PoolAlloc(ctx, sizeof(SPGeo *) * reply_len);
+    SPGeo *coords;
+    for (size_t i = 0; i < reply_len; ++i)
+    {   
+        /* code */
+        RedisModuleCallReply *subreply;
+        subreply = RedisModule_CallReplyArrayElement(reply,i);
+        uint32_t tid = TOINTKEY(RedisModule_CreateStringFromCallReply(RedisModule_CallReplyArrayElement(subreply,0)));
 
-    // uint32_t newId = (count / 2) + 1;
-    // // newId[0] = ;
-    // // double newScore = d[i] = (double) floor(rand() / 1000) ;;
-    // // t = RedisModule_PoolAlloc(ctx, sizeof(SPZSetItem));
-    // // t->score = 0;
-    // // t->items = kb_init(SPID, KB_SMALL_SIZE);
-    // // p = kb_get(SPID, scores, newId);
+        RedisModuleCallReply *coordreply;
+        coordreply = RedisModule_CallReplyArrayElement(subreply,1);
+        double lon, lat;
+        RedisModule_StringToDouble(RedisModule_CreateStringFromCallReply(RedisModule_CallReplyArrayElement(coordreply,0)), &lon);
+        RedisModule_StringToDouble(RedisModule_CreateStringFromCallReply(RedisModule_CallReplyArrayElement(coordreply,1)), &lat);
 
-    // k = kh_put(IDS, scores, newId, &absent);
-    // if (absent) {
-    //     // kh_value(scores, k) = RedisModule_Strdup("test");
-    //     printf("New\n");
-    // } else {
-    //     printf("Existed\n");
-    // }
-    // // if (!p) {
-    // //     // t = RedisModule_PoolAlloc(ctx, sizeof(SPZSetItem));
-    // //     // t->score = newScore;
-    // //     // t->items = kb_init(SPID, 1024);
-    // //     printf("New\n");
-    // //     k = kh_put(IDS, scores, i, &absent);
-    // //     // kb_put(SPID, scores, newId);
-        
-    // //     // kb_putp(SPSCORE, scores, t);
-    // // } else {
-    // //     // ++p->count;
-    // //     printf("Existed\n");
-    // //     // kb_put(SPID, p->items, newId);
-    // // }
-    // RedisModule_ReplyWithSimpleString(ctx, "add one");
-    // RedisModule_ReplyWithLongLong(ctx, RedisModule_Milliseconds() - startTimer);
-    // // if (count <=100) {
-    // //     kbitr_t itr;
-    // //     kb_itr_first(SPID, scores, &itr); // get an iterator pointing to the first
-    // //     for (; kb_itr_valid(&itr); kb_itr_next(SPSCORE, scores, &itr)) { // move on
-    // //         p = &kb_itr_key(SPZSetItem, &itr);
-    // //         printf("%lf\t %d\n", p->score, kb_size(p->items));
-    // //     }
-    // // }
-    // startTimer = RedisModule_Milliseconds();
-    // //iterate all
-    // // kbitr_t itr;
-    // // kb_itr_first(SPID, scores, &itr); // get an iterator pointing to the first
-    // // for (; kb_itr_valid(&itr); kb_itr_next(SPID, scores, &itr)) { // move on
-    // //     p = &kb_itr_key(size_t, &itr);
-    // // }
+        // printf("%u = [%f, %f]\n", id, lat, lon);
+        coords = RedisModule_PoolAlloc(ctx, sizeof(SPGeo));
+        coords->id  = tid;
+        coords->lat  = lat;
+        coords->lon  = lon;
+        // coords->hh  = NULL;
+        allCoords[i] = coords;
+    }
+    // SPGeo *theCoords = NULL;
+    khash_t(GEO) *theCoords = kh_init(GEO);
+    // khash_t(SIDS) *set;
+    int absent;
+    khint_t k;
+    startTimer = RedisModule_Milliseconds();
+    for (uint32_t i = 0; i < reply_len; ++i)
+    {
+        // coords = allCoords[i];
+        coords = allCoords[i];
+        k = kh_put(GEO, theCoords, coords->id, &absent);
+        if (absent) {
+            kh_put_value(theCoords, k, coords);
+        }
+        // HASH_ADD_INT(theCoords, id, allCoords[i]);    
+    }
+    RedisModule_ReplyWithSimpleString(ctx, "UT add all took:");
+    RedisModule_ReplyWithLongLong(ctx, RedisModule_Milliseconds() - startTimer);
+    RedisModule_ReplyWithSimpleString(ctx, "items:");
+    RedisModule_ReplyWithLongLong(ctx, kh_size(theCoords));
+
+    startTimer = RedisModule_Milliseconds();
+    double distance;
+    size_t found = 0;
     // uint32_t id;
-    // // const char *sid;
-    // for (k = kh_begin(scores); k != kh_end(scores); ++k) {
-    //     if (kh_exist(scores, k)) {
-    //         //do nothing
-    //         id = kh_key(scores,k);
+    // coords = theCoords->head;
+    kh_foreach_value(theCoords, coords, {
+        distance = SPDist(slat, slon, coords->lat, coords->lon);
+        found += (distance <= radius);
+    })
 
-    //         if (count <= 100) {
-    //             printf("%d\t\n", kh_key(scores,k));
-    //         }
-            
-    //         // REDISMODULE_NOT_USED(k);
+    
+    // while(coords) {
+    //     distance = SPDist(slat, slon, coords->lat, coords->lon);
+    //     found += (distance <= radius);
+    //     coords = coords->next;
+    // }
+    // for (k = 0; k < kh_end(theCoords); ++k) {
+    //     if (kh_exist(theCoords, k)) {
+    //         coords = kh_value(theCoords, k);
+    //         distance = SPDist(slat, slon, coords->lat, coords->lon);
+    //         found += (distance <= radius);
     //     }
     // }
-
-    // RedisModule_ReplyWithSimpleString(ctx, "iterate all");
-    // RedisModule_ReplyWithLongLong(ctx, RedisModule_Milliseconds() - startTimer);
-
-
-    // // uint32_t sidt;
-    // // RedisModuleString *sids = RedisModule_CreateString(ctx, "12a6c9", 7);
-    // startTimer = RedisModule_Milliseconds();
-    // int cnt = 0;
-    // for (i = 0; i < count; ++i) {
-    //     k = kh_get(IDS, scores, a[i]);
-    //     cnt += kh_exist(scores,k);
-    //     // kh_put(IDS, scores, a[i], &absent);
-    //     // kb_put(SPID, scores, a[i]);
-    //     // if (absent) {
-    //     //     kh_value(scores, k) = RedisModule_Strdup("test");
-    //     // }
-    // }   
-    // // free((char*)kh_key(h, k));
-    // char reply[50];
-    // sprintf(reply, "get all %d", cnt);
-    // RedisModule_ReplyWithSimpleString(ctx, reply);
-    // RedisModule_ReplyWithLongLong(ctx, RedisModule_Milliseconds() - startTimer);
+            
+    // kh_foreach(theCoords, id, coords, {
+    //     distance = SPDist(slat, slon, coords->lat, coords->lon);
+    //     found += (distance <= radius);
+    // });
+    // HASH_ITER(hh, theCoords, coords, tmp) {
+    //     distance = SPDist(slat, slon, coords->lat, coords->lon);
+        
+    // }
+    RedisModule_ReplyWithSimpleString(ctx, "haversine took:");
+    RedisModule_ReplyWithLongLong(ctx, RedisModule_Milliseconds() - startTimer);
+    RedisModule_ReplyWithLongLong(ctx, found);
+    RedisModule_ReplyWithDouble(ctx, distance);
 
 
-    // RedisModule_ReplyWithSimpleString(ctx, "count");
-    // RedisModule_ReplyWithLongLong(ctx, kh_size(scores));
+
+    const char * _keyName = "V:A:I:N:startPrice:::V:M";//"V:A:I:H:startPrice:::SALLVALS:M";
+    RedisModuleString * keyName = RedisModule_CreateString(ctx, _keyName, strlen(_keyName));
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_READ);
+
+    SPScoreCont *testLexCont = RedisModule_ModuleTypeGetValue(key);
+
+    khash_t(TESTSCORE) *map =  testLexCont->set;
+    startTimer = RedisModule_Milliseconds();
+    kbtree_t(TESTSCORE) *testTree = kb_init(TESTSCORE, 1024);
+    SPScore *n, *x;
+    // khint_t k;
     
-    // // for (k = kh_begin(scores); k != kh_end(scores); ++k) {
-    // //     if (kh_exist(scores, k)) {
-    // //         //do nothing
-    // //         // free(kh_value(scores, k));
-    // //         // REDISMODULE_NOT_USED(k);
-    // //         RedisModule_Free(kh_value(scores, k));
-    // //     }
-    // // }
-
-    // kh_destroy(IDS, scores);
-    // // printf("BTree Create took %lldms\n", RedisModule_Milliseconds() - startTimer);
+    size_t cnt = 0;
+    uint32_t xid;
     
-    // kb_destroy(SPSCORE, scores);
+    kh_foreach_key(map, xid, {
+        k = kh_get(TESTSCORE, map, xid);
+        x = kh_value(map, k);
+        n = RedisModule_PoolAlloc(ctx, sizeof(SPScore));
+        n->id = xid;
+        n->score = x->score;
+        kb_putp(TESTSCORE, testTree, n);
+        cnt++;
+    });
+    RedisModule_ReplyWithSimpleString(ctx, "adding sorted took:");
+    RedisModule_ReplyWithLongLong(ctx, RedisModule_Milliseconds() - startTimer);
+    RedisModule_ReplyWithSimpleString(ctx, "add:");
+    RedisModule_ReplyWithLongLong(ctx, cnt);
+    // kbitr_t itr;
+    // kb_itr_first(TESTSCORE, testTree, &itr);
+    // for (; kb_itr_valid(&itr); kb_itr_next(TESTSCORE, testTree, &itr)) { // move on
+    //     n = &kb_itr_key(SPScore, &itr);
+    //     if (n) RedisModule_Free(n);
+    // }
+    kb_destroy(TESTSCORE, testTree);
+    
     return REDISMODULE_OK;
 }
 
@@ -227,7 +286,11 @@ int SpredisSetRedisKeyValueType(RedisModuleKey *key, int type, void *value) {
     return RedisModule_ModuleTypeSetValue(key, SPREDISMODULE_TYPES[type],value);
 }
 
+
+
 int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    // SPLazyPool = thpool_init(1);
+
     if (RedisModule_Init(ctx,"spredis",1,REDISMODULE_APIVER_1)
         == REDISMODULE_ERR) return REDISMODULE_ERR;
     SPREDISMODULE_TYPES = RedisModule_Alloc(sizeof(RedisModuleType*) * 128);
@@ -236,16 +299,16 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     SpredisFacetInit();
 
     printf("SPREDIS_SORT_MEMORIES initialized (bleep bleep blorp)\n");
-    uint32_t x = 1222345;
-    printf("A 64bit integer in hex looks like %" PRIx32 "\n", x);
+    // uint32_t x = 1222345;
+    // printf("A 64bit integer in hex looks like %" PRIx32 "\n", x);
     for (int j = 0; j < argc; j++) {
         const char *s = RedisModule_StringPtrLen(argv[j],NULL);
         printf("Module loaded with ARGV[%d] = %s\n", j, s);
     }
 
 
-    if (RedisModule_CreateCommand(ctx,"spredis.btreetest",
-        SpredisBTREETEST_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx,"spredis.haversinetest",
+        SpredisTEST_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
     
     /* support commands */
@@ -307,6 +370,43 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
 
 
+    
+    if (RedisModule_CreateCommand(ctx,"spredis.zadd",
+        SpredisZSetAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx,"spredis.zscore",
+        SpredisZSetScore_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx,"spredis.zrem",
+        SpredisZSetRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx,"spredis.zcard",
+        SpredisZSetCard_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+
+    if (RedisModule_CreateCommand(ctx,"spredis.zladd",
+        SpredisZLexSetAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx,"spredis.zlscore",
+        SpredisZLexSetScore_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx,"spredis.zlrem",
+        SpredisZLexSetRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx,"spredis.zlcard",
+        SpredisZLexSetCard_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+
+
+
     if (RedisModule_CreateCommand(ctx,"spredis.sadd",
         SpredisSetAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
@@ -320,7 +420,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx,"spredis.scard",
-        SpredisSetCard_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        SpredisSetCard_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx,"spredis.staddall",
@@ -348,20 +448,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         .free = SpredisDHashFreeCallback
     };
     // SPREDISMODULE_TYPES = RedisModule_Alloc(sizeof(RedisModuleType*) * 10);
-    RedisModuleTypeMethods stm = {
-        .version = REDISMODULE_TYPE_METHOD_VERSION,
-        .rdb_load = SpredisSetRDBLoad,
-        .rdb_save = SpredisSetRDBSave,
-        .aof_rewrite = SpredisSetRewriteFunc,
-        .free = SpredisSetFreeCallback
-    };
-
-    SPREDISMODULE_TYPES[SPSETTYPE] = RedisModule_CreateDataType(ctx, "SPpSPeTSS",
-        SPREDISDHASH_ENCODING_VERSION, &stm);
-
-    if (SPREDISMODULE_TYPES[SPSETTYPE] == NULL) return REDISMODULE_ERR;
-
-
+    
 
     SPREDISMODULE_TYPES[SPDBLTYPE] = RedisModule_CreateDataType(ctx, "p_DHshSSS",
         SPREDISDHASH_ENCODING_VERSION, &tm);
@@ -392,6 +479,48 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     SPREDISMODULE_TYPES[SPTMPRESTYPE] = RedisModule_CreateDataType(ctx, "Sp_TMPRSS",
         SPREDISDHASH_ENCODING_VERSION, &rm);
 
+
+    RedisModuleTypeMethods stm = {
+        .version = REDISMODULE_TYPE_METHOD_VERSION,
+        .rdb_load = SpredisSetRDBLoad,
+        .rdb_save = SpredisSetRDBSave,
+        .aof_rewrite = SpredisSetRewriteFunc,
+        .free = SpredisSetFreeCallback
+    };
+
+    SPREDISMODULE_TYPES[SPSETTYPE] = RedisModule_CreateDataType(ctx, "SPpSPeTSS",
+        SPREDISDHASH_ENCODING_VERSION, &stm);
+
+    if (SPREDISMODULE_TYPES[SPSETTYPE] == NULL) return REDISMODULE_ERR;
+
+
+    RedisModuleTypeMethods ztm = {
+        .version = REDISMODULE_TYPE_METHOD_VERSION,
+        .rdb_load = SpredisZSetRDBLoad,
+        .rdb_save = SpredisZSetRDBSave,
+        .aof_rewrite = SpredisZSetRewriteFunc,
+        .free = SpredisZSetFreeCallback
+    };
+
+    SPREDISMODULE_TYPES[SPZSETTYPE] = RedisModule_CreateDataType(ctx, "SPpSZeTSS",
+        SPREDISDHASH_ENCODING_VERSION, &ztm);
+
+
+    if (SPREDISMODULE_TYPES[SPZSETTYPE] == NULL) return REDISMODULE_ERR;
+
+    RedisModuleTypeMethods zltm = {
+        .version = REDISMODULE_TYPE_METHOD_VERSION,
+        .rdb_load = SpredisZLexSetRDBLoad,
+        .rdb_save = SpredisZLexSetRDBSave,
+        .aof_rewrite = SpredisZLexSetRewriteFunc,
+        .free = SpredisZLexSetFreeCallback
+    };
+
+    SPREDISMODULE_TYPES[SPZLSETTYPE] = RedisModule_CreateDataType(ctx, "LsPpSZTSS",
+        SPREDISDHASH_ENCODING_VERSION, &zltm);
+
+
+    if (SPREDISMODULE_TYPES[SPZLSETTYPE] == NULL) return REDISMODULE_ERR;
 
     
     // if (SPDBLTYPE == NULL) return REDISMODULE_ERR;

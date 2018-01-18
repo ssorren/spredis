@@ -9,15 +9,78 @@
 
 // #define QUEUE_COUNT  1024
 
-static inline int SpredisSortDataCompareLT(SpredisSortData *a, SpredisSortData *b, SpredisColumnData *mcd) {
+#define IS_EXCLUSIVE(arg) ( memcmp(arg, "(", 1) ? 0 : 1 )
+#define ARG_MINUS_INC_EXC(arg) ( !memcmp(arg, "(", 1) || !memcmp(arg, "[", 1) ? arg + 1 : arg )
 
+static inline int SpredisLexGT(int a) {
+    return a > 0;
+}
+
+static inline int SpredisLexGTE(int a) {
+    return a == 0;
+}
+
+static inline int SpredisLexLT(int a) {
+    return a < 0;
+}
+
+static inline int SpredisLexLTE(int a) {
+    return a <= 0;
+}
+
+
+
+#define SP_LEXLTCMP(arg) (IS_EXCLUSIVE(arg) ? SpredisLexLT : SpredisLexLTE)
+#define SP_LEXGTCMP(arg) (IS_EXCLUSIVE(arg) ? SpredisLexGT : SpredisLexGTE)
+
+
+static inline int SpredisScoreGT(double a, double b) {
+    return (a > b);
+}
+
+static inline int SpredisScoreGTE(double a, double b) {
+    return (a >= b);
+}
+
+static inline int SpredisScoreLT(double a, double b) {
+    // printf("scoreing lt...\n");
+    return (a < b);
+}
+
+static inline int SpredisScoreLTE(double a, double b) {
+    // printf("scoreing lte...\n");
+    return (a <= b);
+}
+
+
+#define SP_SCRLTCMP(arg) (IS_EXCLUSIVE(arg) ? SpredisScoreLT : SpredisScoreLTE)
+#define SP_SCRGTCMP(arg) (IS_EXCLUSIVE(arg) ? SpredisScoreGT : SpredisScoreGTE)
+
+typedef kbtree_t(SCORE) kbtree_t(SPSCORECOM);
+SPSCORE_BTREE_INIT(SPSCORECOM);
+
+typedef kbtree_t(LEX) kbtree_t(SPLEXCOM);
+SPLEX_BTREE_INIT(SPLEXCOM);
+
+typedef khash_t(LEX) khash_t(SPLEXCOM);
+KHASH_MAP_INIT_INT(SPLEXCOM, SPScore*);
+
+
+typedef khash_t(SCORE) khash_t(SPSCORECOM);
+
+KHASH_MAP_INIT_INT(SPSCORECOM, SPScore*);
+
+
+typedef khash_t(SIDS) khash_t(SIDS_SORT);
+KHASH_SET_INIT_INT(SIDS_SORT);
+
+static inline int SpredisSortDataCompareLT(SpredisSortData *a, SpredisSortData *b, SpredisColumnData *mcd) {
     int i = mcd->colCount;
-    while (i) {
-        i--;
-        if (a->scores[i] < b->scores[i]) return (1 == mcd->orders[i]);
-        if (a->scores[i] > b->scores[i]) return (0 == mcd->orders[i]);
+    while (i--) {
+        if (a->scores[i] < b->scores[i]) return 1;
+        if (a->scores[i] > b->scores[i]) return 0;
     }
-    return 0;
+    return a->id < b->id;
 }
 
 SPREDIS_SORT_INIT(SpredisSortData, SpredisColumnData, SpredisSortDataCompareLT)
@@ -42,9 +105,9 @@ typedef struct _SPThreadedSortArg {
     SpredisSetCont *set;
 } SPThreadedSortArg;
 
-static inline double _SpredisSortDMapValue(SpredisDMapCont *cont, unsigned long id) {
-    return id < cont->size && cont->map[id].full ? cont->map[id].value : -HUGE_VAL; 
-}
+// static inline double _SpredisSortDMapValue(SpredisDMapCont *cont, size_t id) {
+//     return id < cont->size && cont->map[id].full ? cont->map[id].value : -HUGE_VAL; 
+// }
 
 int SPThreadedSort_reply_func(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 {
@@ -72,7 +135,7 @@ void SPThreadedSort_FreePriv(void *prv)
 void SPThreadedSort(void *arg) {
 	SPThreadedSortArg *targ = arg;
     size_t i = 0;
-    khash_t(SIDS) *set = targ->set->set;
+    khash_t(SIDS_SORT) *set = targ->set->set;
     SpredisColumnData *mcd = targ->mcd;
     SpredisSortData **datas = targ->datas;
     SpredisSortData *d;
@@ -80,18 +143,25 @@ void SPThreadedSort(void *arg) {
     int j = mcd->colCount;
     SpredisProtectReadMap(targ->set);
     while (j) {
+        // mcd->colFns[i]->protect(mcd->colPtrs[--j]);
         SpredisProtectReadMap(mcd->cols[--j]);
     }
+    khint_t kk;
+    khash_t(SPSCORECOM) *scoreMap;
     kh_foreach_key(set, id, {
-        d = RedisModule_Alloc(sizeof(SpredisSortData));
+        d = RedisModule_Calloc(1, sizeof(SpredisSortData));
         datas[i] = d;
         d->id = id;
-        d->scores = RedisModule_Alloc(sizeof(double) * mcd->colCount);
+        d->scores =  mcd->colCount ? RedisModule_Alloc(sizeof(double) * mcd->colCount) : NULL;
         
         int k = mcd->colCount;
         while (k) {
             --k;
-            d->scores[k] = _SpredisSortDMapValue(mcd->cols[k], d->id);
+            scoreMap = mcd->cols[k]->set;
+            // d->scores[k] = mcd->colFns[k]->getScore(mcd->colPtrs[k], d->id);
+            kk = kh_get(SPSCORECOM, scoreMap, d->id);
+            d->scores[k] = ((kk == kh_end(scoreMap) ? -HUGE_VAL : kh_val(scoreMap, kk)->score)) * mcd->orders[k];
+            // _SpredisSortDMapValue(mcd->cols[k], d->id);
         }
         i++;
     });
@@ -102,6 +172,7 @@ void SPThreadedSort(void *arg) {
 	
     j = mcd->colCount;
     while (j) {
+        // mcd->colFns[i]->unprotect(mcd->colPtrs[--j]);
         SpredisUnProtectMap(mcd->cols[--j]);
     }
     SpredisUnProtectMap(targ->set);
@@ -113,7 +184,7 @@ int SpredisIntroSortSset(RedisModuleCtx *ctx, RedisModuleKey *zkey, SpredisSetCo
 
 	// printf("%s %d\n", "Calling sort...", cont == NULL);
 
-    khash_t(SIDS) *set = cont->set;
+    khash_t(SIDS_SORT) *set = cont->set;
     // printf("%s %d\n", "Calling sort2...", set == NULL);
     size_t count = kh_size(set);
     
@@ -173,16 +244,15 @@ int SpredisFetchColumnsAndOrders(RedisModuleCtx *ctx, RedisModuleString **argv, 
         RedisModuleKey *key = RedisModule_OpenKey(ctx,zkey,
             REDISMODULE_READ);
         
-        int keyType;
-        if (HASH_EMPTY_OR_WRONGTYPE(key, &keyType, SPDBLTYPE)){
+        int keyType, keyType2;
+        if (!(HASH_EMPTY_OR_WRONGTYPE(key, &keyType, SPZSETTYPE) || HASH_EMPTY_OR_WRONGTYPE(key, &keyType2, SPZLSETTYPE))){
             RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
             return REDISMODULE_ERR;
         }
         mcd->cols[i] = RedisModule_ModuleTypeGetValue(key);
         RedisModule_CloseKey(key);
         const char * theOrder = RedisModule_StringPtrLen(order, NULL);
-        // int asc = SPREDIS_ORDER(theOrder)strcasecmp(SPREDIS_ASC, theOrder);
-        mcd->orders[i] = SPREDIS_ORDER(theOrder);//(asc == 0) ? 1 : 0;
+        mcd->orders[i] = SPREDIS_ORDER_INT(theOrder);
     }
     return REDISMODULE_OK;
 }
@@ -209,11 +279,13 @@ int SpredisZsetMultiKeySort_RedisCommand(RedisModuleCtx *ctx, RedisModuleString 
             RedisModule_ReplyWithLongLong(ctx, 0);
 			return REDISMODULE_OK;	
 		}
-        SpredisColumnData *mcd = RedisModule_Alloc(sizeof(SpredisColumnData));
+        SpredisColumnData *mcd = RedisModule_Calloc(1, sizeof(SpredisColumnData));
         mcd->colCount = columnCount;
         if (columnCount > 0) {
-	        mcd->cols = RedisModule_Alloc(sizeof(SpredisDMapCont *) * columnCount);
+	        mcd->cols = RedisModule_Calloc(columnCount, sizeof(SPScoreCont *));
 	        mcd->orders = RedisModule_Alloc(sizeof(int) * columnCount);
+            // mcd->colPtrs = RedisModule_Calloc(columnCount, sizeof(void *));
+            // mcd->colFns = RedisModule_Calloc(columnCount, sizeof(SPColFns *));
         }
         
         for (int i = 0; i < columnCount; ++i) mcd->cols[i] = NULL;
@@ -238,45 +310,56 @@ int SpredisZsetMultiKeySort_RedisCommand(RedisModuleCtx *ctx, RedisModuleString 
 
 int SpredisStoreLexRange_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx); /* Use automatic memory management. */
-    const char DELIM = ';';
+    // const char DELIM = ';';
     // long long arraylen = 0;
 
     if (argc != 6) return RedisModule_WrongArity(ctx);
     
 
-    RedisModuleKey *key = RedisModule_OpenKey(ctx,argv[2], REDISMODULE_READ|REDISMODULE_WRITE);
+    RedisModuleKey *key = RedisModule_OpenKey(ctx,argv[2], REDISMODULE_READ);
 
-    int keyType = RedisModule_KeyType(key);
+    int keyType;
+    
+    if (HASH_NOT_EMPTY_AND_WRONGTYPE(key, &keyType ,SPZLSETTYPE) == 1) {
+        RedisModule_CloseKey(key);
+        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
+    }
     if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_ReplyWithLongLong(ctx,0);
         return REDISMODULE_OK;
     }
-    if (keyType != REDISMODULE_KEYTYPE_ZSET) {
-        RedisModule_CloseKey(key);
-        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
-    }
+
     RedisModuleKey *store = RedisModule_OpenKey(ctx,argv[1],
-        REDISMODULE_WRITE);
+        REDISMODULE_WRITE|REDISMODULE_READ);
 
     int storeType = RedisModule_KeyType(store);
-    if (HASH_NOT_EMPTY_AND_WRONGTYPE_CHECKONLY(store, &storeType ,SPSETTYPE) == 1) {
-        RedisModule_CloseKey(key);
-        RedisModule_CloseKey(store);
+    if (HASH_NOT_EMPTY_AND_WRONGTYPE_CHECKONLY(store, &storeType ,SPSETTYPE) == 1) {;
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
     }
 
-    if (RedisModule_ZsetFirstInLexRange(key,argv[4],argv[5]) != REDISMODULE_OK) {
-        RedisModule_CloseKey(key);
-        RedisModule_CloseKey(store);
-        return RedisModule_ReplyWithError(ctx,"ERR invalid range");
+    const unsigned char * gtCmp = (const unsigned char *)RedisModule_StringPtrLen(argv[4], NULL);
+    const unsigned char * ltCmp = (const unsigned char *)RedisModule_StringPtrLen(argv[5], NULL);
+
+    int (*GT)(int) = SP_LEXGTCMP(gtCmp);
+    int (*LT)(int) = SP_LEXLTCMP(ltCmp);
+
+    gtCmp = ARG_MINUS_INC_EXC(gtCmp);
+    ltCmp = ARG_MINUS_INC_EXC(ltCmp);
+
+    size_t gtLen = strlen((const char *)gtCmp);
+    size_t ltLen = strlen((const char *)ltCmp);
+
+    if ( ltLen > 0 && ( (unsigned char)(ltCmp[ ltLen - 1 ]) - 0xff) < 0) {
+        ltLen += 1;
+        gtLen += 1;
     }
-    
+
     RedisModuleString *hintName = argv[3];
     size_t len;
     RedisModule_StringPtrLen(hintName, &len);
     RedisModuleKey *hintKey = NULL;
     SpredisSetCont *hintCont = NULL;
-    khash_t(SIDS) *hint = NULL;
+    khash_t(SIDS_SORT) *hint = NULL;
     if (len) {
         hintKey = RedisModule_OpenKey(ctx,argv[3], REDISMODULE_READ);
         int hintType;
@@ -287,61 +370,87 @@ int SpredisStoreLexRange_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **a
             return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
         }
         hintCont = RedisModule_ModuleTypeGetValue(hintKey);
-        if (hintCont != NULL) hint = hintCont->set;
+        if (hintCont != NULL) {
+            hint = hintCont->set;
+        }
     }
 
+    SPScoreCont *testLexCont = RedisModule_ModuleTypeGetValue(key);
+    kbtree_t(SPLEXCOM) *testLex = testLexCont->btree;
+
+    SPScore *l, *u, *cand;
     SpredisSetCont *resCont = _SpredisInitSet();
-    khash_t(SIDS) *res = resCont->set;
+    khash_t(SIDS_SORT) *res = resCont->set;
     SpredisSetRedisKeyValueType(store, SPSETTYPE, resCont);
-    double score;
-    
-    uint32_t id;
     int absent;
-    if (hint == NULL) {
-        while(!RedisModule_ZsetRangeEndReached(key)) {
-            RedisModuleString *ele;
-            const char *theStr, *newEle;
-            ele = RedisModule_ZsetRangeCurrentElement(key,&score);
-            theStr = RedisModule_StringPtrLen(ele, NULL);
-            newEle = strrchr(theStr, DELIM);
-            if (newEle) {
-                size_t nl = strlen(newEle);
-                if (nl > 1) {
-                    
-                    id = TOINTFROMCHAR(newEle + 1);//RedisModule_CreateString(ctx, newEle + 1, nl - 1);
-                    kh_put(SIDS, res, id, &absent);
-                    // RedisModule_ZsetAdd(store, ++newScore, id, NULL);
+    kbitr_t itr;
+    SPScore t = {
+        .id = 0,
+        .lex = (char *)gtCmp
+    };
+    
+    kb_intervalp(SPLEXCOM, testLex, &t, &l, &u);
+
+    if (l == NULL) {
+        RedisModule_ReplyWithLongLong(ctx,0);
+        RedisModule_CloseKey(key);
+        RedisModule_CloseKey(store);
+        RedisModule_CloseKey(hintKey);
+        return REDISMODULE_OK;
+    }
+
+    int shouldIntersore = 0;
+    if (hint != NULL && ltLen < 3 && (kh_size(hint) < (kb_size(testLex) / 2))) { //at some point it is not faster to intersore first
+        shouldIntersore = 1;
+    }
+
+    if (shouldIntersore) {
+        uint32_t id;
+        khint_t k;
+        kh_foreach_key(hint, id, {
+            k = kh_get(SPLEXCOM, testLexCont->set, id);
+            if (kh_exist(testLexCont->set, k)) {
+                cand = kh_value(testLexCont->set, k);
+                if (cand && cand->lex && GT(memcmp(gtCmp, cand->lex, gtLen )) && LT(memcmp(cand->lex,ltCmp , ltLen ))) {
+                    kh_put(SIDS_SORT, res, id, &absent);
                 }
-                
             }
-            RedisModule_ZsetRangeNext(key);
-            // arraylen++;
-        }
+        });
     } else {
-        while(!RedisModule_ZsetRangeEndReached(key)) {
-            RedisModuleString *ele;
-            const char *theStr, *newEle;
-            ele = RedisModule_ZsetRangeCurrentElement(key,&score);
-            theStr = RedisModule_StringPtrLen(ele, NULL);
-            newEle = strrchr(theStr, DELIM);
-            if (newEle) {
-                size_t nl = strlen(newEle);
-                if (nl > 1) {
-                    
-                    id = TOINTFROMCHAR(newEle + 1);//RedisModule_CreateString(ctx, newEle + 1, nl - 1);
-                    // printf("soring %u\n", id);
-                    if ( kh_contains(SIDS, hint, id) ) {
-                        kh_put(SIDS, res, id, &absent);
+        int reached = 0;
+        kb_itr_getp(SPLEXCOM, testLex, l, &itr); // get an iterator pointing to the first
+        if (hint == NULL) { //wordy to do it this way bu way more efficient
+            for (; kb_itr_valid(&itr); kb_itr_next(SPLEXCOM, testLex, &itr)) { // move on
+                cand = &kb_itr_key(SPScore, &itr);
+                if (cand && cand->lex ) {
+                    // printf("%s,%u,, %d, %d\n", cand->lex, cand->id, memcmp(gtCmp, cand->lex, gtLen ),  memcmp(cand->lex, ltCmp, ltLen ));
+                    if (reached || GT(memcmp(gtCmp, cand->lex, gtLen ))) {
+                        if (LT(memcmp(cand->lex,ltCmp , ltLen ))) {
+                            reached = 1;
+                            kh_put(SIDS_SORT, res, cand->id, &absent);
+                        } else {
+                            break;
+                        }
                     }
-                    // RedisModule_ZsetAdd(store, ++newScore, id, NULL);
                 }
-                
             }
-            RedisModule_ZsetRangeNext(key);
-            // arraylen++;
+        } else {
+            for (; kb_itr_valid(&itr); kb_itr_next(SPLEXCOM, testLex, &itr)) { // move on
+                cand = &kb_itr_key(SPScore, &itr);
+                if (cand && cand->lex ) {
+                    if (reached || GT(memcmp(gtCmp, cand->lex, gtLen ))) {
+                        if (LT(memcmp(cand->lex,ltCmp , ltLen ))) {
+                            reached = 1;
+                            if ( kh_contains(SIDS_SORT, hint, cand->id)) kh_put(SIDS_SORT, res, cand->id, &absent);
+                        } else {
+                            break;
+                        }
+                    }     
+                }
+            }
         }
     }
-    RedisModule_ZsetRangeStop(key);
+    // RedisModule_ZsetRangeStop(key);
     RedisModule_ReplyWithLongLong(ctx,kh_size(res));
     RedisModule_CloseKey(key);
     RedisModule_CloseKey(store);
@@ -368,26 +477,19 @@ int SpredisStoreRangeByScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString
 
     if (argc != 6) return RedisModule_WrongArity(ctx);
 
-    long long zcard = _SpredisZCard(ctx, argv[2]);
-    if (zcard == 0) return RedisModule_ReplyWithLongLong(ctx, 0);
-
     RedisModuleKey *store = RedisModule_OpenKey(ctx,argv[1],
         REDISMODULE_WRITE);
     RedisModuleKey *key = RedisModule_OpenKey(ctx,argv[2],
         REDISMODULE_READ|REDISMODULE_WRITE);
-    int keyType = RedisModule_KeyType(key);
-    if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
-        RedisModule_ReplyWithLongLong(ctx,0);
-        RedisModule_CloseKey(store);
-        return REDISMODULE_OK;
-    }
-
-    if (keyType !=  REDISMODULE_KEYTYPE_ZSET) {
+    int keyType;
+    if (HASH_NOT_EMPTY_AND_WRONGTYPE(key, &keyType ,SPZSETTYPE) == 1) {
         RedisModule_CloseKey(key);
-        RedisModule_CloseKey(store);
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
     }
-    
+    if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
+        RedisModule_ReplyWithLongLong(ctx,0);
+        return REDISMODULE_OK;
+    }
     int storeType = RedisModule_KeyType(store);
     if (HASH_NOT_EMPTY_AND_WRONGTYPE_CHECKONLY(store, &storeType ,SPSETTYPE) == 1) {
         RedisModule_CloseKey(key);
@@ -400,8 +502,7 @@ int SpredisStoreRangeByScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString
     RedisModule_StringPtrLen(hintName, &len);
     RedisModuleKey *hintKey = NULL;
     SpredisSetCont *hintCont = NULL;
-    khash_t(SIDS) *hint = NULL;
-
+    khash_t(SIDS_SORT) *hint = NULL;
 
     if (len) {
     	hintKey = RedisModule_OpenKey(ctx,argv[3], REDISMODULE_READ);
@@ -415,68 +516,98 @@ int SpredisStoreRangeByScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString
     	hintCont = RedisModule_ModuleTypeGetValue(hintKey);
     	if (hintCont != NULL) hint = hintCont->set;
     }
-    
+
+    SPScoreCont *testScoreCont = RedisModule_ModuleTypeGetValue(key);
+    kbtree_t(SPSCORECOM) *testScore = testScoreCont->btree;
+
+    const char * gtCmp = RedisModule_StringPtrLen(argv[4], NULL);
+    const char * ltCmp = RedisModule_StringPtrLen(argv[5], NULL);
+
+    int (*GT)(double,double) = SP_SCRGTCMP(gtCmp);
+    int (*LT)(double,double) = SP_SCRLTCMP(ltCmp);
+
+    gtCmp = ARG_MINUS_INC_EXC(gtCmp);
+    ltCmp = ARG_MINUS_INC_EXC(ltCmp);
+
     double min;
     double max;
-    RedisModule_StringToDouble(argv[4], &min);
-    RedisModule_StringToDouble(argv[5], &max);
-    int shouldIntersore = 0;
-    if (hint != NULL && (min == -HUGE_VAL || max == HUGE_VAL || kh_size(hint) < zcard / 2)) { //at some point it is not faster to intersore first
-    	shouldIntersore = 1;
-    } else {
+    RedisModule_StringToDouble(RedisModule_CreateString(ctx, gtCmp, strlen(gtCmp)), &min);
+    RedisModule_StringToDouble(RedisModule_CreateString(ctx, ltCmp, strlen(ltCmp)), &max);
 
-	    if (RedisModule_ZsetFirstInScoreRange(key, min, max, 0, 0) != REDISMODULE_OK) {
-	        RedisModule_CloseKey(key);
-	        RedisModule_CloseKey(store);
-	        RedisModule_CloseKey(hintKey);
-	        return RedisModule_ReplyWithError(ctx,"ERR invalid range");
-	    }
+    SPScore *cand, *l, *u;
+    SPScore t = {
+        .id = INT32_MAX,
+        .score = min
+    };
+    kb_intervalp(SPSCORECOM, testScore, &t, &l, &u);
+    if (l == NULL) {
+        RedisModule_ReplyWithLongLong(ctx,0);
+        RedisModule_CloseKey(key);
+        RedisModule_CloseKey(store);
+        RedisModule_CloseKey(hintKey);
+        return REDISMODULE_OK;
+    }
+    int shouldIntersore = 0;
+    if (hint != NULL && (min == -HUGE_VAL || max == HUGE_VAL || kh_size(hint) < kb_size(testScore) / 5)) { //at some point it is not faster to intersore first
+    	shouldIntersore = 1;
     }
 
     SpredisSetCont *resCont = _SpredisInitSet();
 	SpredisSetRedisKeyValueType(store, SPSETTYPE, resCont);    
-    khash_t(SIDS) *res = resCont->set;
+    khash_t(SIDS_SORT) *res = resCont->set;
     int absent;
+    int reached = 0;
     uint32_t id;
+    
+    kbitr_t itr;
+
     if (shouldIntersore) {
-    	double score;
-    	int zres;
-    	uint32_t id;
-    	RedisModuleString *ele;
-    	kh_foreach_key(hint, id, {
-    		ele = RedisModule_CreateStringPrintf(ctx, "%"PRIx32, id);
-    		zres = RedisModule_ZsetScore(key, ele, &score);
-    		if (zres == REDISMODULE_OK && score >= min && score <= max) {
-    			kh_put(SIDS, res, id, &absent);
-    		}
-    	});
+        khint_t k;
+        kh_foreach_key(hint, id, {
+            k = kh_get(SPSCORECOM, testScoreCont->set, id);
+            if (kh_exist(testScoreCont->set, k)) {
+                cand = kh_value(testScoreCont->set, k);
+                if (cand && GT( cand->score, min ) && LT(cand->score, max)) {
+                    kh_put(SIDS_SORT, res, id, &absent);
+                }
+            }
+        });
     	// int RedisModule_ZsetScore(RedisModuleKey *key, RedisModuleString *ele, double *score)
 
 
     } else if (hint == NULL) { //more wordy, but also more efficient to do one if statement rather tht 1 per iteration
-   		 while(!RedisModule_ZsetRangeEndReached(key)) {
-	        double score;
-	        RedisModuleString *ele = RedisModule_ZsetRangeCurrentElement(key,&score);
-	        id = TOINTKEY(ele);
-	        kh_put(SIDS, res, id, &absent);
-	        RedisModule_ZsetRangeNext(key);
-	        // arraylen++;
-	    }		
+        kb_itr_getp(SPSCORECOM, testScore, l, &itr);
+        for (; kb_itr_valid(&itr); kb_itr_next(SPSCORECOM, testScore, &itr)) { // move on
+            cand = &kb_itr_key(SPScore, &itr);
+            if (cand) {
+                if (reached || GT(cand->score, min)) {
+                    if (LT(cand->score, max)) {
+                        reached = 1;
+                        kh_put(SIDS_SORT, res, cand->id, &absent);
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }		
    	} else {
    		// khint_t k;
-   		while(!RedisModule_ZsetRangeEndReached(key)) {
-	        double score;
-	        RedisModuleString *ele = RedisModule_ZsetRangeCurrentElement(key,&score);
-	        id = TOINTKEY(ele);
-	        // k = kh_get(SIDS, hint, id);
-	        if ( kh_contains(SIDS, hint, id) ) {
-	        	kh_put(SIDS, res, id, &absent);	
-	        }
-	        RedisModule_ZsetRangeNext(key);
-	        // arraylen++;
-	    }
+        kb_itr_getp(SPSCORECOM, testScore, l, &itr);
+        for (; kb_itr_valid(&itr); kb_itr_next(SPSCORECOM, testScore, &itr)) { // move on
+            cand = &kb_itr_key(SPScore, &itr);
+            if (cand) {
+                if (reached || GT(cand->score, min)) {
+                    if (LT(cand->score, max)) {
+                        reached = 1;
+                        if (kh_contains(SIDS_SORT, hint, cand->id)) kh_put(SIDS_SORT, res, cand->id, &absent);
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
    	}
-    RedisModule_ZsetRangeStop(key);
+    
     RedisModule_ReplyWithLongLong(ctx,kh_size(res));
     RedisModule_CloseKey(key);
     RedisModule_CloseKey(store);

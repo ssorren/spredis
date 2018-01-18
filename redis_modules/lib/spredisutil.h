@@ -1,6 +1,27 @@
 #ifndef __SPREDIS_UTIL
 #define __SPREDIS_UTIL
 
+#include <math.h>
+
+// #define R 6371
+typedef struct _SPLatLong {
+    double lat;
+    double lon;
+} SPLatLong;
+  //we want this code inlined for performance reasons
+#define DISTANCE_INIT(name) \
+static inline void  SP##name##Dist(double alat, double alon, double blat, double blon SPLatLong *a, SPLatLong *b, double *d) \
+{ \
+    double dx, dy, dz; \
+    alon -= blon; \
+    alon *= 0.017453292519943295, alat *= 0.017453292519943295, blat *= 0.017453292519943295; \
+    dz = sin(alat) - sin(blat); \
+    dx = cos(alon) * cos(alat) - cos(blat); \
+    dy = sin(alon) * cos(alat); \
+    (*d) = asin(sqrt(dx * dx + dy * dy + dz * dz) / 2) * 2 * 6372797.560856; \
+}
+
+
 #define SpredisProtectWriteMap(map) pthread_rwlock_wrlock(&map->mutex)
 #define SpredisProtectReadMap(map) pthread_rwlock_rdlock(&map->mutex)
 #define SpredisUnProtectMap(map) pthread_rwlock_unlock(&map->mutex)

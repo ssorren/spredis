@@ -9,10 +9,21 @@ typedef struct SpredisSortData {
   double *scores;
 } SpredisSortData;
 
+typedef struct _SPColFns {
+	double (*getScore)(void *,uint32_t);
+	void (*protect)(void *);
+	void (*unprotect)(void *);
+} SPColFns;
+
 typedef struct SpredisColumnData {
-    SpredisDMapCont **cols;
+    SPScoreCont **cols;
+    // void **colPtrs;
     int *orders;
     int colCount;
+    // SPColFns **colFns;
+    // double (**getScore)(uint32_t);
+    // void (**protect)();
+    // void (**unprotect)();
 } SpredisColumnData;
 
 

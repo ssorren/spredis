@@ -7,10 +7,10 @@ local start,stop = value,value
 if value:sub(#value) == '*' then
 	value = value:sub(1,#value - 1)
 	start = '['..value
-	stop = '['..value..'\\xff'
+	stop = '['..value..string.char(0xff)
 else
-	start = '['..value..':'
-	stop = '['..value..':\\xff'
+	start = '['..value
+	stop = '['..value
 end
 
 local len = redis.call('spredis.storerangebylex', store, index, hint, start, stop)
