@@ -1,5 +1,5 @@
-#ifndef __SPREDIS_HASH
-#define __SPREDIS_HASH
+#ifndef __SPREDIS_MAIN
+#define __SPREDIS_MAIN
 #include <pthread.h>
 #include <inttypes.h>
 #include "lib/thpool.h"
@@ -32,27 +32,30 @@
 #include "lib/spredisutil.h"
 #include "lib/khash.h"
 #include "lib/sp_kbtree.h"
-#include "lib/klist.h"
+#include "lib/kvec.h"
+#include "lib/kexpr.h"
 // #include "lib/kbtree.h"
 // #include "klist.h"
 
+typedef khint64_t spid_t;
+
 #define TOCHARKEY(k) RedisModule_StringPtrLen(k,NULL)
-#define TOINTKEY(k) strtol(RedisModule_StringPtrLen(k,NULL), NULL, 16)
-#define TOINTKEY_PTRLEN(k,len) strtol(RedisModule_StringPtrLen(k,len), NULL, 16)
-#define TOINTKEY10(k) strtol(RedisModule_StringPtrLen(k,NULL), NULL, 10)
+#define TOINTKEY(k) strtoull(RedisModule_StringPtrLen(k,NULL), NULL, 16)
+#define TOINTKEY_PTRLEN(k,len) strtoull(RedisModule_StringPtrLen(k,len), NULL, 16)
+#define TOINTKEY10(k) strtoull(RedisModule_StringPtrLen(k,NULL), NULL, 10)
 
-#define TOINTID(k,base) strtol(RedisModule_StringPtrLen(k,NULL), NULL, base)
+#define TOINTID(k,base) strtoull(RedisModule_StringPtrLen(k,NULL), NULL, base)
 
-#define TOSIZE_TKEY(k) (size_t)strtol(RedisModule_StringPtrLen(k,NULL), NULL, 10)
-#define TOINTFROMCHAR(k) strtol(k, NULL, 16)
+#define TOSIZE_TKEY(k) (size_t)strtoull(RedisModule_StringPtrLen(k,NULL), NULL, 10)
+#define TOINTFROMCHAR(k) strtoull(k, NULL, 16)
 // #define TOSTRINGFROMCHAR(k) (int)strtol(k, NULL, 16)
 
-#define SPDBLTYPE 0
-#define SPSTRINGTYPE 1
-#define SPTMPRESTYPE 2
-#define SPSETTYPE 3
-#define SPZSETTYPE 4
-#define SPZLSETTYPE 5
+#define SPTMPRESTYPE 0
+#define SPSETTYPE 1
+#define SPZSETTYPE 2
+#define SPZLSETTYPE 3
+#define SPHASHTYPE 4
+#define SPGEOTYPE 5
 
 #define SET_REDIS_KEY_VALUE_TYPE(key, type, value) RedisModule_ModuleTypeSetValue(key, SPSTRINGTYPE ,dhash);
 
@@ -62,6 +65,14 @@ int HASH_EMPTY_OR_WRONGTYPE(RedisModuleKey *key, int *type, int targetType);
 
 int SpredisSetRedisKeyValueType(RedisModuleKey *key, int type, void *value);
 
+#define MAX_LAT             90.0
+#define MIN_LAT             -90.0
+
+#define MAX_LONG            180.0
+#define MIN_LONG            -180.0
+
+char* SPGeoHashEncode(double lat, double lng, int precision);
+char* SPGeoHashEncodeForRadius(double lat, double lng, double radiusInMeters, int *precision);
 // static threadpool SPLazyPool;
 // #define SP_LAZY_CALL(a, obj) thpool_add_work(SPLazyPool, (void*)a, obj)
 
@@ -69,13 +80,10 @@ int SpredisSetRedisKeyValueType(RedisModuleKey *key, int type, void *value);
 #include "types/spset.h"
 #include "types/spscore.h"
 #include "types/splexscore.h"
-#include "types/spstringtype.h"
-#include "types/spdoubletype.h"
+#include "types/sphash.h"
 #include "commands/spmcsort.h"
 #include "commands/spfacet.h"
 #include "types/sptempresult.h"
-
-
 
 
 #endif

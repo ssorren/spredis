@@ -131,17 +131,33 @@ int main() {
 
 /* compiler specific configuration */
 
-#if UINT_MAX == 0xffffffffu
-typedef unsigned int khint32_t;
-#elif ULONG_MAX == 0xffffffffu
-typedef unsigned long khint32_t;
-#endif
+// #if UINT_MAX == 0xffffffffu
+// typedef unsigned int khint32_t;
+// #elif ULONG_MAX == 0xffffffffu
+// typedef unsigned long khint32_t;
+// #endif
 
-#if ULONG_MAX == ULLONG_MAX
-typedef unsigned long khint64_t;
-#else
-typedef unsigned long long khint64_t;
-#endif
+// #if ULONG_MAX == ULLONG_MAX
+// typedef unsigned long khint64_t;
+// #else
+// typedef unsigned long long khint64_t;
+// #endif
+
+
+// #if UINT_MAX == 0xffffffffu
+// typedef unsigned int khint32_t;
+// #elif ULONG_MAX == 0xffffffffu
+/* we're going to force this to use 64 bit integers, */
+typedef unsigned long khint32_t;
+// #endif
+
+// #if ULONG_MAX == ULLONG_MAX
+// typedef unsigned long khint64_t;
+// #else
+typedef uint64_t khint64_t;
+// #endif
+
+
 
 #ifndef kh_inline
 #ifdef _MSC_VER
@@ -387,7 +403,9 @@ static const double __ac_HASH_UPPER = 0.77;
   @param  key   The integer [khint64_t]
   @return       The hash value [khint_t]
  */
-#define kh_int64_hash_func(key) (khint32_t)((key)>>33^(key)^(key)<<11)
+// #define kh_int64_hash_func(key) (khint32_t)((key)>>33^(key)^(key)<<11)
+
+#define kh_int64_hash_func(key) (khint32_t)(key)
 /*! @function
   @abstract     64-bit integer comparison function
  */
@@ -637,8 +655,9 @@ static kh_inline khint_t __ac_Wang_hash(khint_t key)
 #define kh_foreach_value(h, vvar, code) { \
 	vvar = h->head; \
     while(vvar != NULL) { \
+    	void *__tmp__ = vvar->next; \
     	code; \
-    	vvar = vvar->next; \
+    	vvar = __tmp__; \
     } \
 }
 

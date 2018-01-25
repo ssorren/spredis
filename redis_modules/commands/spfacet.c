@@ -13,6 +13,8 @@
 // };
 
 // KHASH_MAP_INIT_STR(SPREDISFACET, long long) ;
+typedef khash_t(HASH) khash_t(FHASH);
+KHASH_MAP_INIT_INT64(FHASH, SPHashValue*);
 
 typedef struct _SPFacetResult {
 	const char *val;
@@ -24,8 +26,10 @@ typedef struct _SPFacetResult {
 typedef struct _SPFacetData {
 	// RedisModuleString *keyName;
 	
-	SpredisSMapCont *col;
-	long long count;
+	// SpredisSMapCont *col;
+	SPHashCont *col;
+	int type;
+	uint64_t count;
 	int order;
 	// khash_t(SPREDISFACET) *valMap;
 	SPFacetResult *valMap;
@@ -118,7 +122,8 @@ void SPThreadedFacet(void *arg) {
 	SPFacetData **facets = targ->facets;
 	SpredisSortData *d;
 	SPFacetData *facet;
-	char *av;
+	// char *av;
+	SPHashValue *av;
 	// khint_t x;
 	
 	for (int i = 0; i < targ->facetCount; ++i)
@@ -128,31 +133,41 @@ void SPThreadedFacet(void *arg) {
 	int keyI;
 	int facetCount = targ->facetCount;
 	SPFacetResult *fm;
+	khint_t k;
+	char *sav;
+	uint16_t pos = 0;
+	SPPtrOrD_t value;
+	// printf("here?\n");
 	while(dSize)
 	{
 		keyI = facetCount;
 		d = datas[--dSize];
 		while(keyI) {
 			facet = facets[--keyI];
-			av = SpredisSMapValue(facet->col, d->id);
-		    if (av != NULL) {
-		    	HASH_FIND_STR(facet->valMap, av, fm);
-		    	if (fm) {
-		    		fm->count++;
-		    	} else {
-		    		fm = (SPFacetResult*)RedisModule_Alloc(sizeof(SPFacetResult));
-		    		fm->val = av;
-		    		fm->count = 1;
-		    		HASH_ADD_KEYPTR( hh, facet->valMap, fm->val, strlen(fm->val), fm );
-		    	}
+			if (facet->type == SPHASHTYPE) {
+				k = kh_get(FHASH, facet->col->set, d->id);
 
-		        // x = kh_put(SPREDISFACET, facet->valMap, av , &xres);
-		        // if (xres) {
-		        // 	kh_value(facet->valMap, x) += 1;
-		        // } else {
-		        // 	kh_value(facet->valMap, x);
-		        // }
-		    }
+				if (k == kh_end(facet->col->set) || !kh_exist(facet->col->set, k)) continue;
+				av = kh_value(facet->col->set, k);//SpredisSMapValue(facet->col, d->id);
+
+			    if (av != NULL && av->type == SPHashStringType) {
+			    	// printf("found av\n");
+			    	kv_foreach_hv_value(av, &value, &pos, {
+			    		sav = (char*)value;
+			    		HASH_FIND_STR(facet->valMap, sav, fm);
+				    	if (fm) {
+				    		fm->count++;
+				    	} else {
+				    		fm = (SPFacetResult*)RedisModule_Calloc(1, sizeof(SPFacetResult));
+				    		fm->val = sav;
+				    		fm->count = 1;
+				    		HASH_ADD_KEYPTR( hh, facet->valMap, fm->val, strlen(fm->val), fm );
+				    	}
+			    	});
+			    } else if (av != NULL && av->type == SPHashDoubleType) {
+
+			    }
+			}
 		}
 	}
 	for (int i = 0; i < targ->facetCount; ++i)
@@ -170,10 +185,27 @@ int SPFacetResultCompareLT(SPFacetResult *a, SPFacetResult *b, SPFacetData *face
 	// (((b) < (a)) - ((a) < (b)))
 	if (a->count < b->count) return (facet->order == 1);
 	if (a->count > b->count) return (facet->order == 0);
+	int res = strcasecmp(a->val, b->val);
+	if (res < 0) return (facet->order == 1);
+	if (res > 0) return (facet->order == 0);
 	return 0;
 }
 
-SPREDIS_SORT_INIT(SPFacetResult, SPFacetData , SPFacetResultCompareLT)
+int SPFacetResultCompareNameLT(SPFacetResult *a, SPFacetResult *b, SPFacetData *facet) {
+	// (((b) < (a)) - ((a) < (b)))
+	int res = strcasecmp(a->val, b->val);
+	if (res < 0) return (facet->order == 1);
+	if (res > 0) return (facet->order == 0);
+	if (a->count < b->count) return (facet->order == 1);
+	if (a->count > b->count) return (facet->order == 0);
+	return 0;
+}
+
+SPREDIS_SORT_INIT(SPFacetResult, SPFacetData , SPFacetResultCompareLT);
+
+typedef SPFacetResult SPFacetResultByName;
+
+SPREDIS_SORT_INIT(SPFacetResultByName, SPFacetData , SPFacetResultCompareNameLT);
 
 int SpedisPrepareFacetResult(SPFacetData** facets, int facetCount) {
 	int counted, max;
@@ -189,27 +221,14 @@ int SpedisPrepareFacetResult(SPFacetData** facets, int facetCount) {
 		max = facet->replyCount ? facet->replyCount : facet->count;
 		facet->results = RedisModule_Alloc(sizeof(SPFacetResult*) * facet->count);
 		counted = 0;
-
-		
-		// int k = 0;
 		HASH_ITER(hh, facet->valMap, current, tmp) {
 	        facet->results[counted] = current;
 	        ++counted;
 		}
-		// HASH_ITER(hh, facet->valMap, current, tmp) {
-		// 	HASH_DEL(users,current_user);   delete; users advances to next 
-		// 	free(current_user);            /* optional- if you want to free  */
-		// }
-		// kh_foreach(facet->valMap, k, v, {
-		// 	fr = RedisModule_Alloc(sizeof(SPFacetResult));
-		// 	facet->results[counted] = fr;
-	 //        fr->val = k;
-	 //        fr->count = v;
-	 //        ++counted;
-	 //    });
 	    max = (max > facet->count) ? facet->count : max;
 	    facet->replyCount = max;
 	    SpredisSPFacetResultSort(facet->count, facet->results, facet);
+	    // SpredisSPFacetResultByNameSort(facet->count, facet->results, facet);
 	}
 	return REDISMODULE_OK;
 }
@@ -218,7 +237,6 @@ int SpedisBuildFacetResult(RedisModuleCtx *ctx, SPFacetData** facets, int facetC
 	RedisModule_ReplyWithArray(ctx, facetCount);
 	SPFacetData *facet;
 	SPFacetResult *fr;
-	// long long v;
 
 	for (int i = 0; i < facetCount; ++i)
 	{
@@ -275,14 +293,14 @@ int SpredisFacets_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
 	SPFacetData *facet;
 	for (i = 0; i < keyCount; ++i) {
 		// can't use RedisModule_PoolAlloc as these are traveling to a different thread
-		facet = RedisModule_Alloc(sizeof(SPFacetData));
-	    facets[i] = facet;
+		// facet = 
+	    facets[i] = RedisModule_Calloc(1, sizeof(SPFacetData));//facet;
 	    // facet->valMap = kh_init(SPREDISFACET);
 
-	    facet->valMap = NULL;
-	    facet->results = NULL;
-	    facet->count = 0;
-	    facet->replyCount = 0;
+	    // facet->valMap = NULL;
+	    // facet->results = NULL;
+	    // facet->count = 0;
+	    // facet->replyCount = 0;
 	}
 	//3: get the base information for each facet
 	argI = argOffset;
@@ -298,13 +316,13 @@ int SpredisFacets_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
 	    }
 	    facet->order = SPREDIS_ORDER(RedisModule_StringPtrLen(argv[argI++], NULL));
 	    int keyType;
-	    if (HASH_EMPTY_OR_WRONGTYPE(keys[i], &keyType, SPSTRINGTYPE) != 0) {
+	    if (HASH_EMPTY_OR_WRONGTYPE(keys[i], &keyType, SPHASHTYPE) != 0) {
 	    	ok = REDISMODULE_ERR;
-	    	// printf("BAD KEY: %s\n", RedisModule_StringPtrLen(facet.key,NULL));
 	        RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
 	        break;
 	    }
 	    facet->col = RedisModule_ModuleTypeGetValue(keys[i]);
+	    facet->type = SPHASHTYPE;
     }
     //4: let's not forget to close all the keys, 
     //   we won't need to keep them open on the facet thread as they are thread read safe

@@ -32,10 +32,9 @@ LIBDIR := lib
 MODULE_OBJ = spredis.o
 MODULE_SO = spredis.so
 
-DEPS = 	$(TYPEDIR)/spstringtype.o $(TYPEDIR)/spdoubletype.o $(TYPEDIR)/sptempresult.o $(TYPEDIR)/spset.o \
-		$(TYPEDIR)/spscore.o $(TYPEDIR)/splexscore.o\
+DEPS = 	$(TYPEDIR)/sptempresult.o $(TYPEDIR)/spset.o $(TYPEDIR)/spscore.o $(TYPEDIR)/splexscore.o $(TYPEDIR)/sphash.o\
 		$(COMDIR)/spfacet.o $(COMDIR)/spmcsort.o \
-		$(LIBDIR)/thpool.o $(LIBDIR)/spscorebtree.o \
+		$(LIBDIR)/thpool.o $(LIBDIR)/kexpr.o\
 
 export
 

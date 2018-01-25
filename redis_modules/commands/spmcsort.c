@@ -63,16 +63,16 @@ typedef kbtree_t(LEX) kbtree_t(SPLEXCOM);
 SPLEX_BTREE_INIT(SPLEXCOM);
 
 typedef khash_t(LEX) khash_t(SPLEXCOM);
-KHASH_MAP_INIT_INT(SPLEXCOM, SPScore*);
+KHASH_MAP_INIT_INT64(SPLEXCOM, SPScore*);
 
 
 typedef khash_t(SCORE) khash_t(SPSCORECOM);
 
-KHASH_MAP_INIT_INT(SPSCORECOM, SPScore*);
+KHASH_MAP_INIT_INT64(SPSCORECOM, SPScore*);
 
 
 typedef khash_t(SIDS) khash_t(SIDS_SORT);
-KHASH_SET_INIT_INT(SIDS_SORT);
+KHASH_SET_INIT_INT64(SIDS_SORT);
 
 static inline int SpredisSortDataCompareLT(SpredisSortData *a, SpredisSortData *b, SpredisColumnData *mcd) {
     int i = mcd->colCount;
@@ -378,15 +378,17 @@ int SpredisStoreLexRange_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **a
     SPScoreCont *testLexCont = RedisModule_ModuleTypeGetValue(key);
     kbtree_t(SPLEXCOM) *testLex = testLexCont->btree;
 
-    SPScore *l, *u, *cand;
+    SPScoreKey *l, *u;
+    SPScore *cand;
     SpredisSetCont *resCont = _SpredisInitSet();
     khash_t(SIDS_SORT) *res = resCont->set;
     SpredisSetRedisKeyValueType(store, SPSETTYPE, resCont);
     int absent;
     kbitr_t itr;
-    SPScore t = {
+
+    SPScoreKey t = {
         .id = 0,
-        .lex = (char *)gtCmp
+        .score = (uint64_t)gtCmp
     };
     
     kb_intervalp(SPLEXCOM, testLex, &t, &l, &u);
@@ -409,7 +411,7 @@ int SpredisStoreLexRange_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **a
         khint_t k;
         kh_foreach_key(hint, id, {
             k = kh_get(SPLEXCOM, testLexCont->set, id);
-            if (kh_exist(testLexCont->set, k)) {
+            if (k != kh_end(testLexCont->set)) {
                 cand = kh_value(testLexCont->set, k);
                 if (cand && cand->lex && GT(memcmp(gtCmp, cand->lex, gtLen )) && LT(memcmp(cand->lex,ltCmp , ltLen ))) {
                     kh_put(SIDS_SORT, res, id, &absent);
@@ -421,7 +423,7 @@ int SpredisStoreLexRange_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **a
         kb_itr_getp(SPLEXCOM, testLex, l, &itr); // get an iterator pointing to the first
         if (hint == NULL) { //wordy to do it this way bu way more efficient
             for (; kb_itr_valid(&itr); kb_itr_next(SPLEXCOM, testLex, &itr)) { // move on
-                cand = &kb_itr_key(SPScore, &itr);
+                cand = (&kb_itr_key(SPScoreKey, &itr))->value;
                 if (cand && cand->lex ) {
                     // printf("%s,%u,, %d, %d\n", cand->lex, cand->id, memcmp(gtCmp, cand->lex, gtLen ),  memcmp(cand->lex, ltCmp, ltLen ));
                     if (reached || GT(memcmp(gtCmp, cand->lex, gtLen ))) {
@@ -436,7 +438,7 @@ int SpredisStoreLexRange_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **a
             }
         } else {
             for (; kb_itr_valid(&itr); kb_itr_next(SPLEXCOM, testLex, &itr)) { // move on
-                cand = &kb_itr_key(SPScore, &itr);
+                cand = (&kb_itr_key(SPScoreKey, &itr))->value;
                 if (cand && cand->lex ) {
                     if (reached || GT(memcmp(gtCmp, cand->lex, gtLen ))) {
                         if (LT(memcmp(cand->lex,ltCmp , ltLen ))) {
@@ -533,9 +535,9 @@ int SpredisStoreRangeByScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString
     double max;
     RedisModule_StringToDouble(RedisModule_CreateString(ctx, gtCmp, strlen(gtCmp)), &min);
     RedisModule_StringToDouble(RedisModule_CreateString(ctx, ltCmp, strlen(ltCmp)), &max);
-
-    SPScore *cand, *l, *u;
-    SPScore t = {
+    SPScoreKey *l, *u;
+    SPScore *cand;
+    SPScoreKey t = {
         .id = INT32_MAX,
         .score = min
     };
@@ -565,7 +567,7 @@ int SpredisStoreRangeByScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString
         khint_t k;
         kh_foreach_key(hint, id, {
             k = kh_get(SPSCORECOM, testScoreCont->set, id);
-            if (kh_exist(testScoreCont->set, k)) {
+            if (k != kh_end(testScoreCont->set)) {
                 cand = kh_value(testScoreCont->set, k);
                 if (cand && GT( cand->score, min ) && LT(cand->score, max)) {
                     kh_put(SIDS_SORT, res, id, &absent);
@@ -578,7 +580,7 @@ int SpredisStoreRangeByScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString
     } else if (hint == NULL) { //more wordy, but also more efficient to do one if statement rather tht 1 per iteration
         kb_itr_getp(SPSCORECOM, testScore, l, &itr);
         for (; kb_itr_valid(&itr); kb_itr_next(SPSCORECOM, testScore, &itr)) { // move on
-            cand = &kb_itr_key(SPScore, &itr);
+            cand = (&kb_itr_key(SPScoreKey, &itr))->value;
             if (cand) {
                 if (reached || GT(cand->score, min)) {
                     if (LT(cand->score, max)) {
@@ -594,7 +596,7 @@ int SpredisStoreRangeByScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString
    		// khint_t k;
         kb_itr_getp(SPSCORECOM, testScore, l, &itr);
         for (; kb_itr_valid(&itr); kb_itr_next(SPSCORECOM, testScore, &itr)) { // move on
-            cand = &kb_itr_key(SPScore, &itr);
+            cand = (&kb_itr_key(SPScoreKey, &itr))->value;
             if (cand) {
                 if (reached || GT(cand->score, min)) {
                     if (LT(cand->score, max)) {

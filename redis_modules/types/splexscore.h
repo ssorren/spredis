@@ -17,7 +17,7 @@
 // 	kbtree_t(LEX) *btree;
 // } SPLexScoreCont;
 
-int SPLexScoreComp(SPScore a, SPScore b);
+int SPLexScoreComp(SPScoreKey a, SPScoreKey b);
 
 SPScoreCont *SPLexScoreContInit();
 void SPLexScoreContDestroy(SPScoreCont *cont);
@@ -25,10 +25,11 @@ void SpredisZLexSetRDBSave(RedisModuleIO *io, void *ptr);
 void SpredisZLexSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value);
 void *SpredisZLexSetRDBLoad(RedisModuleIO *io, int encver);
 void SpredisZLexSetFreeCallback(void *value);
-int SPLexScorePutValue(SPScoreCont *cont, uint32_t id, const char *lexValue, double val);
-int SPLexScoreDel(SPScoreCont *cont, uint32_t id);
+int SPLexScorePutValue(SPScoreCont *cont, spid_t id, const char *lexValue, double val);
+int SPLexScoreDel(SPScoreCont *cont, spid_t id);
 int SpredisZLexSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int SpredisZLexSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int SpredisZLexSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int SpredisZLexSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+int SpredisZLexSetApplySortScores_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 #endif

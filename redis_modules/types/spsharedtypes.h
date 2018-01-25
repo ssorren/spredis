@@ -4,61 +4,68 @@
 #include <stdlib.h>
 #include "../lib/khash.h"
 #include "../lib/sp_kbtree.h"
+#include "../lib/kvec.h"
 
-#define SPScoreComp(a,b) (((a).score < (b).score) ? -1 : (((b).score < (a).score) ? 1 : kb_generic_cmp((a).id, (b).id)))
 
+#define SPScoreComp(a,b) (((double)(a).score < (double)(b).score) ? -1 : (((double)(b).score < (double)(a).score) ? 1 : kb_generic_cmp((a).id, (b).id)))
+
+
+typedef uint8_t SPHashValueType;
+typedef uint64_t SPPtrOrD_t;
+typedef kvec_t(SPPtrOrD_t) SPPtrOrD;
 
 
 typedef struct _SPGeo {
-    uint32_t id;
+    spid_t id;
     double lat, lon;
+    char *lex;
     struct _SPGeo *next, *prev;
 } SPGeo;
 
-
 typedef struct _SPScore {
-    uint32_t id;//!order is important
-    double score;//!order is important
+    spid_t id;
+    double score;
     char *lex;
     struct _SPScore *next, *prev;
 } SPScore;
 
-// typedef struct _SPLexScore {
-//     uint32_t id; //!order is important
-//     double score;//!order is important
-//     struct _SPLexScore *next, *prev;
-    
-// } SPLexScore;
 
-extern int SPLexScoreComp(SPScore a, SPScore b);
+typedef struct _SPScoreKey {
+	spid_t id;
+    SPPtrOrD_t score;
+    void *value;
+} SPScoreKey;
 
-/* tree stuff */
-/*typedef struct {
-	int32_t is_internal:1, n:31;
-} kbnode_t;
 
-typedef struct {
-	kbnode_t *x;
-	int i;
-} kbpos_t;
 
-typedef struct {
-	kbpos_t stack[KB_MAX_DEPTH], *p;
-} kbitr_t;*/
+
+#define SPHashStringType 0
+#define SPHashDoubleType 1
+
+typedef struct _SPHashValue {
+	spid_t id;
+	SPHashValueType type;
+	kvec_t(char) used;
+    SPPtrOrD values;
+    struct _SPHashValue *next, *prev;
+} SPHashValue;
+
+
+extern int SPLexScoreComp(SPScoreKey a, SPScoreKey b);
 
 
 KB_TYPE(SCORE);
 typedef kbtree_t(SCORE) kbtree_t(LEX);
-// KB_TYPE(LEX);
 
-// KHASH_MAP_INIT_INT(LEX, SPLexScore*)
-KHASH_DECLARE_SET(SIDS, uint32_t);
-KHASH_DECLARE(SCORE, uint32_t, SPScore*);
+KHASH_DECLARE_SET(SIDS, spid_t);
+KHASH_DECLARE(SCORE, spid_t, SPScore*);
+KHASH_DECLARE(HASH, spid_t, SPHashValue*);
 
 typedef khash_t(SCORE) khash_t(LEX);
-KHASH_DECLARE(GEO, uint32_t, SPGeo*);
-// KHASH_MAP_INIT_INT(GEO, SPGeo*)
+KHASH_DECLARE(GEO, spid_t, SPGeo*);
 
-#define SPSCORE_BTREE_INIT(name) KBTREE_INIT(name, SPScore, SPScoreComp)
-#define SPLEX_BTREE_INIT(name) KBTREE_INIT(name, SPScore, SPLexScoreComp)
+
+
+#define SPSCORE_BTREE_INIT(name) KBTREE_INIT(name, SPScoreKey, SPScoreComp)
+#define SPLEX_BTREE_INIT(name) KBTREE_INIT(name, SPScoreKey, SPLexScoreComp)
 #endif

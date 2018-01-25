@@ -1,6 +1,6 @@
 #include "../spredis.h"
 
-KHASH_SET_INIT_INT(SIDS);
+KHASH_SET_INIT_INT64(SIDS);
 
 void * _SpredisInitSet() {
 
@@ -26,7 +26,7 @@ void _SpredisDestroySet(void *value) {
 void SpredisSetRDBSave(RedisModuleIO *io, void *ptr) {
     SpredisSetCont *dhash = ptr;
     RedisModule_SaveUnsigned(io, kh_size(dhash->set));
-    uint32_t id;
+    spid_t id;
     kh_foreach_key(dhash->set, id, {
     	RedisModule_SaveUnsigned(io, id);
     });
@@ -35,10 +35,10 @@ void SpredisSetRDBSave(RedisModuleIO *io, void *ptr) {
 
 void SpredisSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value) {
 	SpredisSetCont *dhash = value;
-    uint32_t id;
+    spid_t id;
     kh_foreach_key(dhash->set, id, {
     	char ress[32];
-        sprintf(ress, "%" PRIx32, id);
+        sprintf(ress, "%" PRIx64, (unsigned long long)id);
         // RedisModule_CreateStringPrintf(ctx, "%" PRIx32, id);
     	RedisModule_EmitAOF(aof,"spredis.sadd","sc", key, ress);
     });
@@ -54,10 +54,10 @@ void *SpredisSetRDBLoad(RedisModuleIO *io, int encver) {
     }
     
     SpredisSetCont *dhash = _SpredisInitSet();
-    uint32_t valueCount = RedisModule_LoadUnsigned(io);
-    for (uint32_t i = 0; i < valueCount; ++i)
+    spid_t valueCount = RedisModule_LoadUnsigned(io);
+    for (spid_t i = 0; i < valueCount; ++i)
     {
-        uint32_t id = RedisModule_LoadUnsigned(io);
+        spid_t id = RedisModule_LoadUnsigned(io);
         int absent;
         kh_put(SIDS, dhash->set, id, &absent);
     }
@@ -88,7 +88,7 @@ SpredisSetCont *SpredisSIntersect(SpredisSetCont **cas, int count) {
 		SpredisProtectReadMap(cas[--j]);
 	}
 	SpredisSpredisSetContSort(count, cas, NULL);
-	uint32_t id;
+	spid_t id;
 	// khint_t bk;
 	int absent, add;
 	res = _SpredisInitSet();
@@ -138,7 +138,7 @@ SpredisSetCont *SpredisSDifference(SpredisSetCont **cas, int count) {
 		SpredisSpredisSetContSort(count - 1, cbs, NULL);
 	}
 	khash_t(SIDS) *a, *comp, *product;
-	uint32_t id;
+	spid_t id;
 	// khint_t bk;
 	int absent, add;
 	res = _SpredisInitSet();
@@ -177,7 +177,7 @@ SpredisSetCont *SpredisSUnion(SpredisSetCont **cas, int count) {
 	SpredisSetCont *res = _SpredisInitSet();
 	khash_t(SIDS) *product = res->set;
 	int absent;
-	uint32_t id;
+	spid_t id;
 	while (count) {
 		a = cas[--count];
 		if (a != NULL) {
@@ -203,7 +203,7 @@ SpredisSetCont *SpredisSAddAll(SpredisSetCont **cas, int count) {
     SpredisSetCont *res = cas[0];
     khash_t(SIDS) *product = res->set;
     int absent;
-    uint32_t id;
+    spid_t id;
     while (count > 0) {
         a = cas[--count];
         if (a != NULL) {
@@ -252,7 +252,7 @@ int SpredisSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     for (int i = 0; i < keyCount; ++i)
     {
         /* code */
-        uint32_t id = TOINTID(argv[argIndex++],16);
+        spid_t id = TOINTID(argv[argIndex++],16);
         int absent;
         kh_put(SIDS, dhash->set, id, &absent);
         setCount += absent;
@@ -305,7 +305,7 @@ int SpredisSetMember_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
     }
 
     SpredisSetCont *dhash = RedisModule_ModuleTypeGetValue(key);
-    uint32_t id = TOINTID(argv[2],16);
+    spid_t id = TOINTID(argv[2],16);
 
     SpredisProtectReadMap(dhash);
     // khint_t k = kh_get(SIDS, dhash->set , id);
@@ -337,7 +337,7 @@ int SpredisSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
 
 
     SpredisSetCont *dhash = RedisModule_ModuleTypeGetValue(key);
-    uint32_t id = TOINTID(argv[2],16);
+    spid_t id = TOINTID(argv[2],16);
     SpredisProtectWriteMap(dhash);
     khint_t k = kh_get(SIDS, dhash->set , id);
     if (kh_exist(dhash->set, k)) {
