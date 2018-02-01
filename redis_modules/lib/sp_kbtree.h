@@ -34,6 +34,15 @@
 // #include "../types/spsharedtypes.h"
 #define KB_MAX_DEPTH 64
 
+#ifndef klib_unused
+#if (defined __clang__ && __clang_major__ >= 3) || (defined __GNUC__ && __GNUC__ >= 3)
+#define klib_unused __attribute__ ((__unused__))
+#else
+#define klib_unused
+#endif
+#endif /* klib_unused */
+
+
 typedef struct {
 	int32_t is_internal:1, n:31;
 } kbnode_t;
@@ -94,11 +103,11 @@ extern int kb_itr_next_##name(kbtree_##name##_t *b, kbitr_t *itr); \
 #endif
 #endif /* klib_unused */
 
-#define KB_SCOPE_SI static inline 
-#define KB_SCOPE_S static 
+#define KB_SCOPE_SI static inline klib_unused
+#define KB_SCOPE_S static klib_unused
 
 #define __KB_INIT(name, key_t)											\
-	kbtree_##name##_t *kb_init_##name(int size)							\
+	KB_SCOPE_SI klib_unused kbtree_##name##_t *kb_init_##name(int size)							\
 	{																	\
 		kbtree_##name##_t *b;											\
 		b = RedisModule_Alloc(sizeof(kbtree_##name##_t));	\

@@ -9,16 +9,28 @@ typedef struct _SPLatLong {
     double lon;
 } SPLatLong;
   //we want this code inlined for performance reasons
-#define DISTANCE_INIT(name) \
-static inline void  SP##name##Dist(double alat, double alon, double blat, double blon SPLatLong *a, SPLatLong *b, double *d) \
-{ \
-    double dx, dy, dz; \
-    alon -= blon; \
-    alon *= 0.017453292519943295, alat *= 0.017453292519943295, blat *= 0.017453292519943295; \
-    dz = sin(alat) - sin(blat); \
-    dx = cos(alon) * cos(alat) - cos(blat); \
-    dy = sin(alon) * cos(alat); \
-    (*d) = asin(sqrt(dx * dx + dy * dy + dz * dz) / 2) * 2 * 6372797.560856; \
+// #define SP_DISTANCE_INIT(name)
+static inline void  SPGeoDist(double alat, double alon, double blat, double blon, double *d)
+{
+    double dx, dy, dz;
+    alon -= blon;
+    alon *= 0.017453292519943295, alat *= 0.017453292519943295, blat *= 0.017453292519943295;
+    dz = sin(alat) - sin(blat);
+    dx = cos(alon) * cos(alat) - cos(blat);
+    dy = sin(alon) * cos(alat);
+    (*d) = asin(sqrt(dx * dx + dy * dy + dz * dz) / 2) * 2 * 6372797.560856;
+}
+
+
+static inline double  SPGetDist(double alat, double alon, double blat, double blon)
+{
+    double dx, dy, dz;
+    alon -= blon;
+    alon *= 0.017453292519943295, alat *= 0.017453292519943295, blat *= 0.017453292519943295;
+    dz = sin(alat) - sin(blat);
+    dx = cos(alon) * cos(alat) - cos(blat);
+    dy = sin(alon) * cos(alat);
+    return asin(sqrt(dx * dx + dy * dy + dz * dz) / 2) * 2 * 6372797.560856;
 }
 
 
@@ -130,6 +142,53 @@ void Spredis##type##Sort(size_t n, type **a, extraType *mcd) {					\
 	ks_##type##_introsort_Spredis(n, a, mcd);					\
 }					\
 					\
+
+
+
+#define SP_IS_EXCLUSIVE(arg) ( memcmp(arg, "(", 1) ? 0 : 1 )
+#define SP_ARG_MINUS_INC_EXC(arg) ( !memcmp(arg, "(", 1) || !memcmp(arg, "[", 1) ? arg + 1 : arg )
+
+static inline int SpredisLexGT(int a) {
+    return a > 0;
+}
+
+static inline int SpredisLexGTE(int a) {
+    return a == 0;
+}
+
+static inline int SpredisLexLT(int a) {
+    return a < 0;
+}
+
+static inline int SpredisLexLTE(int a) {
+    return a <= 0;
+}
+
+
+
+#define SP_LEXLTCMP(arg) (SP_IS_EXCLUSIVE(arg) ? SpredisLexLT : SpredisLexLTE)
+#define SP_LEXGTCMP(arg) (SP_IS_EXCLUSIVE(arg) ? SpredisLexGT : SpredisLexGTE)
+
+
+static inline int SpredisScoreGT(double a, double b) {
+    return (a > b);
+}
+
+static inline int SpredisScoreGTE(double a, double b) {
+    return (a >= b);
+}
+
+static inline int SpredisScoreLT(double a, double b) {
+    return (a < b);
+}
+
+static inline int SpredisScoreLTE(double a, double b) {
+    return (a <= b);
+}
+
+
+#define SP_SCRLTCMP(arg) (SP_IS_EXCLUSIVE(arg) ? SpredisScoreLT : SpredisScoreLTE)
+#define SP_SCRGTCMP(arg) (SP_IS_EXCLUSIVE(arg) ? SpredisScoreGT : SpredisScoreGTE)
 
 
 #endif

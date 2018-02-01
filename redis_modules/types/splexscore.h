@@ -17,7 +17,7 @@
 // 	kbtree_t(LEX) *btree;
 // } SPLexScoreCont;
 
-int SPLexScoreComp(SPScoreKey a, SPScoreKey b);
+// int SPLexScoreComp(SPScoreKey a, SPScoreKey b);
 
 SPScoreCont *SPLexScoreContInit();
 void SPLexScoreContDestroy(SPScoreCont *cont);

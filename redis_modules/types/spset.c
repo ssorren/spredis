@@ -1,6 +1,6 @@
 #include "../spredis.h"
 
-KHASH_SET_INIT_INT64(SIDS);
+
 
 void * _SpredisInitSet() {
 
@@ -129,11 +129,13 @@ SpredisSetCont *SpredisSDifference(SpredisSetCont **cas, int count) {
 	SpredisSetCont *ca = cas[0];
 	SpredisSetCont *res;
 	if (ca == NULL) return NULL;
-	size_t j = count;
+	int j = count;
+    // long long startTimer = RedisModule_Milliseconds(); 
 	while (j) {
 		SpredisProtectReadMap(cas[--j]);
+        // printf("set size = %lu\n", kh_size(cas[j]->set));
 	}
-	if (count > 1) {
+	if (count > 2) {
 		SpredisSetCont **cbs = cas + 1;
 		SpredisSpredisSetContSort(count - 1, cbs, NULL);
 	}
@@ -144,10 +146,11 @@ SpredisSetCont *SpredisSDifference(SpredisSetCont **cas, int count) {
 	res = _SpredisInitSet();
 	a = ca->set;
 	product = res->set;
-
+    // printf("COUnt ? %d\n", count);
+    
 	kh_foreach_key(a, id, {
 		add = 1;
-		for (j = 0; j < count; ++j)
+		for (j = 1; j < count; ++j)
 		{
 			comp = cas[j]->set;
 			// bk = kh_get(SIDS, comp, id);
@@ -160,6 +163,8 @@ SpredisSetCont *SpredisSDifference(SpredisSetCont **cas, int count) {
 			kh_put(SIDS,product,id, &absent);
 		}
     });
+    
+    
 	j = count;
 	while (j) {
 		SpredisUnProtectMap(cas[--j]);
@@ -168,6 +173,7 @@ SpredisSetCont *SpredisSDifference(SpredisSetCont **cas, int count) {
 	// 	_SpredisDestroySet(res);
 	// 	return NULL;
 	// }
+    // printf("differnce took %lldms\n", RedisModule_Milliseconds() - startTimer);
 	return res;
 }
 
@@ -368,6 +374,10 @@ int SpredisSTempBase_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
     if ( argc < 3 ) return RedisModule_WrongArity(ctx);
     int keyCount = argc - 2;
     int i, keyType;
+
+
+    // long long startTimer = RedisModule_Milliseconds(); 
+
     RedisModuleString **keyNames = argv + 2;
     // RedisModule_PoolAlloc(ctx, sizeof(RedisModuleKey*) *keyCount);
     // for (int i = 0; i < keyCount; ++i)
@@ -466,6 +476,7 @@ int SpredisSTempBase_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
         RedisModule_ReplyWithLongLong(ctx, 0);
     }
     // RedisModule_ReplicateVerbatim(ctx);
+    // printf("differnce took %lldms\n", RedisModule_Milliseconds() - startTimer);
     return REDISMODULE_OK;
     
 }

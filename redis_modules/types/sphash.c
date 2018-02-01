@@ -1,6 +1,6 @@
 #include "../spredis.h"
 
-KHASH_MAP_INIT_INT64(HASH, SPHashValue*);
+
 
 SPHashCont *SpHashContInit(SPHashValueType valueType) {
 	SPHashCont *cont = RedisModule_Calloc(1, sizeof(SPHashCont));

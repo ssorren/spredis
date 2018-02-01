@@ -71,19 +71,19 @@ int SpredisSetRedisKeyValueType(RedisModuleKey *key, int type, void *value);
 #define MAX_LONG            180.0
 #define MIN_LONG            -180.0
 
-char* SPGeoHashEncode(double lat, double lng, int precision);
-char* SPGeoHashEncodeForRadius(double lat, double lng, double radiusInMeters, int *precision);
-// static threadpool SPLazyPool;
-// #define SP_LAZY_CALL(a, obj) thpool_add_work(SPLazyPool, (void*)a, obj)
 
-
+#include "lib/geohash.h"
+#include "types/spsharedtypes.h"
+#include "types/spgeo.h"
 #include "types/spset.h"
 #include "types/spscore.h"
 #include "types/splexscore.h"
 #include "types/sphash.h"
 #include "commands/spmcsort.h"
+#include "commands/sprangestore.h"
 #include "commands/spfacet.h"
 #include "types/sptempresult.h"
+
 
 
 #endif

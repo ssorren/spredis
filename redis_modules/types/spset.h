@@ -2,7 +2,7 @@
 #define __SPREDIS_SET
 
 #include "../spredis.h"
-#include "spsharedtypes.h"
+
 
 // typedef struct _SpredisSMap_t {
 // 	char full;

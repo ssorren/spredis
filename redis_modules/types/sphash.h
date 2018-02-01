@@ -13,7 +13,6 @@ typedef struct _SPHashCont {
 	pthread_rwlock_t mutex;
 } SPHashCont;
 
-// char *SpredisSMapValue(SpredisSMapCont *map, unsigned long id);
 void SpredisHashRDBSave(RedisModuleIO *io, void *ptr);
 void SpredisHashRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value);
 void *SpredisHashRDBLoad(RedisModuleIO *io, int encver);

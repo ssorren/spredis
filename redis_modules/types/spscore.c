@@ -4,8 +4,7 @@
 
 // KBTREE_INIT(SCORE, SPScore, SPScoreComp);
 // KHASH_MAP_INIT_INT(LEX, SPLexScore*)
-KHASH_MAP_INIT_INT64(SCORE, SPScore*);
-SPSCORE_BTREE_INIT(SCORE);
+
 // typedef struct _SPScoreCont {
 // 	khash_t(SCORE) *set;
 // 	pthread_rwlock_t mutex;

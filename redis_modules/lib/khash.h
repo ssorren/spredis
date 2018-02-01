@@ -147,7 +147,12 @@ int main() {
 // #if UINT_MAX == 0xffffffffu
 // typedef unsigned int khint32_t;
 // #elif ULONG_MAX == 0xffffffffu
-/* we're going to force this to use 64 bit integers, */
+
+
+/* 
+	we're going to force this to use 64 bit integers
+	only deploying on 64 bit systems, no need for 32 bit integers as we want to be able to hold more items
+*/
 typedef unsigned long khint32_t;
 // #endif
 

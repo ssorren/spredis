@@ -32,21 +32,20 @@ LIBDIR := lib
 MODULE_OBJ = spredis.o
 MODULE_SO = spredis.so
 
-DEPS = 	$(TYPEDIR)/sptempresult.o $(TYPEDIR)/spset.o $(TYPEDIR)/spscore.o $(TYPEDIR)/splexscore.o $(TYPEDIR)/sphash.o\
-		$(COMDIR)/spfacet.o $(COMDIR)/spmcsort.o \
-		$(LIBDIR)/thpool.o $(LIBDIR)/kexpr.o\
+
+DEPS = 	$(TYPEDIR)/sptempresult.o $(TYPEDIR)/spset.o $(TYPEDIR)/spscore.o $(TYPEDIR)/splexscore.o $(TYPEDIR)/sphash.o  $(TYPEDIR)/spgeo.o\
+		$(COMDIR)/spfacet.o $(COMDIR)/spmcsort.o $(COMDIR)/sprangestore.o\
+		$(LIBDIR)/thpool.o $(LIBDIR)/kexpr.o $(LIBDIR)/geohash.o\
 
 export
 
 all: $(MODULE_SO)
 
-$(MODULE_SO): $(MODULE_OBJ) $(DEPS)
+$(MODULE_SO): $(MODULE_OBJ) $(DEPS) 
 	$(LD) $^ -o $@ $(SHOBJ_LDFLAGS) $(LDFLAGS)
 
 clean:
 	$(RM) $(MODULE_OBJ) $(MODULE_SO) $(DEPS)
-	$(RM) -f print_version
-	$(RM) -rf build
-	$(MAKE) -C tests clean
+
 
 
