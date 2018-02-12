@@ -134,7 +134,8 @@ SPGeoScoreCont *SPGeoScoreContInit() {
 }
 
 
-void SPGeoScoreContDestroy(SPGeoScoreCont *cont) {
+void SPGeoScoreContDestroy(void *value) {
+    SPGeoScoreCont *cont = value;
 	SpredisProtectWriteMap(cont);
     kb_destroy(GEO, cont->btree);
     SPScore *score;
@@ -151,7 +152,10 @@ void SPGeoScoreContDestroy(SPGeoScoreCont *cont) {
 
 void SpredisZGeoSetFreeCallback(void *value) {
     if (value == NULL) return;
-    SPGeoScoreContDestroy((SPGeoScoreCont *)value);
+    // SPGeoScoreContDestroy((SPGeoScoreCont *)value);
+    SP_TWORK(SPGeoScoreContDestroy, value, {
+        //do nothing
+    });
 }
 
 int SPGeoScorePutValue(SPGeoScoreCont *cont, spid_t id, uint16_t pos, double lat, double lon) {
@@ -291,7 +295,7 @@ int SpredisZGeoSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **arg
     }
     if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_ReplyWithLongLong(ctx, 0);
-        RedisModule_CloseKey(key);
+        // RedisModule_CloseKey(key);
         return REDISMODULE_OK;
     }
 
@@ -299,7 +303,7 @@ int SpredisZGeoSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **arg
     SpredisProtectReadMap(dhash);
     RedisModule_ReplyWithLongLong(ctx,kh_size(dhash->set));
     SpredisUnProtectMap(dhash);
-    RedisModule_CloseKey(key);
+    // RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }
 
@@ -315,7 +319,7 @@ int SpredisZGeoSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
     }
     if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_ReplyWithLongLong(ctx,0);
-        RedisModule_CloseKey(key);
+        // RedisModule_CloseKey(key);
         return REDISMODULE_OK;
     }
 
@@ -329,7 +333,7 @@ int SpredisZGeoSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
         RedisModule_DeleteKey(key);
     }
 
-    RedisModule_CloseKey(key);
+    // RedisModule_CloseKey(key);
     RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;
 }
@@ -356,12 +360,12 @@ int SpredisZGeoSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
         argIndex++;
         int scoreRes = RedisModule_StringToDouble(argv[argIndex++], &(lats[i]));
         if (scoreRes != REDISMODULE_OK) {
-        	RedisModule_CloseKey(key);
+        	// RedisModule_CloseKey(key);
             return RedisModule_ReplyWithError(ctx, "ERR Could not convert lat to double");
         }
         scoreRes = RedisModule_StringToDouble(argv[argIndex++], &(lons[i]));
         if (scoreRes != REDISMODULE_OK) {
-        	RedisModule_CloseKey(key);
+        	// RedisModule_CloseKey(key);
             return RedisModule_ReplyWithError(ctx, "ERR Could not convert lon to double");
         }
     }
@@ -385,7 +389,7 @@ int SpredisZGeoSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
      
     }
     /* if we've aleady seen this id, just set the score */
-    RedisModule_CloseKey(key);
+    // RedisModule_CloseKey(key);
     RedisModule_ReplyWithLongLong(ctx, setCount);
     RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;
@@ -403,7 +407,7 @@ int SpredisZGeoSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **ar
     }
     if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_ReplyWithNull(ctx);
-        RedisModule_CloseKey(key);
+        // RedisModule_CloseKey(key);
         return REDISMODULE_OK;
     }
     SPGeoScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
@@ -421,7 +425,7 @@ int SpredisZGeoSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **ar
 	} else {
 		RedisModule_ReplyWithNull(ctx);
 	}
-    RedisModule_CloseKey(key);
+    // RedisModule_CloseKey(key);
     SpredisUnProtectMap(cont);
     return REDISMODULE_OK;
 }

@@ -49,6 +49,7 @@ int main() {
 #define AC_KVEC_H
 
 #include <stdlib.h>
+#include "redismodule.h"
 
 #define kv_roundup32(x) (--(x), (x)|=(x)>>1, (x)|=(x)>>2, (x)|=(x)>>4, (x)|=(x)>>8, (x)|=(x)>>16, ++(x))
 

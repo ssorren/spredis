@@ -3,6 +3,9 @@
 #include <pthread.h>
 #include <inttypes.h>
 #include "lib/thpool.h"
+#define REDISMODULE_EXPERIMENTAL_API
+#include "lib/redismodule.h"
+#include "lib/sp_parallelqueue.h"
 
 #define SP_FAST_TPOOL_SIZE 8
 #define SP_SLOW_TPOOL_SIZE 12
@@ -34,6 +37,7 @@
 #include "lib/sp_kbtree.h"
 #include "lib/kvec.h"
 #include "lib/kexpr.h"
+#include "lib/thpool.h"
 // #include "lib/kbtree.h"
 // #include "klist.h"
 
@@ -50,20 +54,45 @@ typedef khint64_t spid_t;
 #define TOINTFROMCHAR(k) strtoull(k, NULL, 16)
 // #define TOSTRINGFROMCHAR(k) (int)strtol(k, NULL, 16)
 
-#define SPTMPRESTYPE 0
-#define SPSETTYPE 1
-#define SPZSETTYPE 2
-#define SPZLSETTYPE 3
-#define SPHASHTYPE 4
-#define SPGEOTYPE 5
+#define SPNOTYPE 0
+#define SPTMPRESTYPE 1
+#define SPSETTYPE 2
+#define SPZSETTYPE 3
+#define SPZLSETTYPE 4
+#define SPHASHTYPE 5
+#define SPGEOTYPE 6
+#define SPEXPRTYPE 7
+#define SPMAXTYPE 8
 
 #define SET_REDIS_KEY_VALUE_TYPE(key, type, value) RedisModule_ModuleTypeSetValue(key, SPSTRINGTYPE ,dhash);
+
+#define SPLockContext(ctx) RedisModule_ThreadSafeContextLock(ctx)
+#define SPUnlockContext(ctx) RedisModule_ThreadSafeContextUnlock(ctx)
+
+void kt_for(int n_threads, void (*func)(void*,long,int), void *data, long n);
 
 int HASH_NOT_EMPTY_AND_WRONGTYPE(RedisModuleKey *key, int *type, int targetType);
 int HASH_NOT_EMPTY_AND_WRONGTYPE_CHECKONLY(RedisModuleKey *key, int *type, int targetType);
 int HASH_EMPTY_OR_WRONGTYPE(RedisModuleKey *key, int *type, int targetType);
+void SP_GET_KEYTYPES(RedisModuleKey *key, int *type, int *spType);
 
 int SpredisSetRedisKeyValueType(RedisModuleKey *key, int type, void *value);
+int SPDoWorkInThreadPool(void *func, void *arg);
+void SPDoWorkInParallel(void (**func)(void*), void **arg, int jobCount);
+int SPThreadedWork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int (*command)(RedisModuleCtx*, RedisModuleString**, int));
+
+#define SP_TWORK(f,a, code) {if (SPDoWorkInThreadPool(f,a)) code}
+// void SP_TWORK(void *func, void *arg) {
+//     if () {
+//         printf("%s\n", "THREAD LAUNCH ERROR!!!!!");
+//     }
+// }
+
+#define SP_GEN_TPOOL_SIZE 32
+#define SP_PQ_POOL_SIZE 16
+#define SP_PQ_TCOUNT_SIZE 4
+#define SP_PTHRESHOLD 100
+
 
 #define MAX_LAT             90.0
 #define MIN_LAT             -90.0
@@ -79,6 +108,7 @@ int SpredisSetRedisKeyValueType(RedisModuleKey *key, int type, void *value);
 #include "types/spscore.h"
 #include "types/splexscore.h"
 #include "types/sphash.h"
+#include "types/spexpresolver.h"
 #include "commands/spmcsort.h"
 #include "commands/sprangestore.h"
 #include "commands/spfacet.h"

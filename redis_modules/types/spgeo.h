@@ -20,7 +20,7 @@ typedef struct _SPGeoSearchAreas {
 // int SPLexScoreComp(SPScoreKey a, SPScoreKey b);
 
 SPGeoScoreCont *SPGeoScoreContInit();
-void SPGeoScoreContDestroy(SPGeoScoreCont *cont);
+void SPGeoScoreContDestroy(void *cont);
 void SpredisZGeoSetRDBSave(RedisModuleIO *io, void *ptr);
 void SpredisZGeoSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value);
 void *SpredisZGeoSetRDBLoad(RedisModuleIO *io, int encver);

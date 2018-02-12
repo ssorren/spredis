@@ -19,21 +19,19 @@
 
 typedef struct _SpredisSetCont {
 	khash_t(SIDS) *set;
-	// void (*forEachKey)(void*, int*);
-	// void (*forEachKey)(void*, int*);
 	pthread_rwlock_t mutex;
-	// pthread_rwlock_t bigLock;
 } SpredisSetCont;
 
 // void * _SpredisInitSet();
 
 
 
-SpredisSetCont *SpredisSIntersect(SpredisSetCont **sets, int count);
-SpredisSetCont *SpredisSDifference(SpredisSetCont **sets, int count);
-SpredisSetCont *SpredisSUnion(SpredisSetCont **sets, int count);
+// SpredisSetCont *SpredisSIntersect(SpredisSetCont **sets, int count);
+// SpredisSetCont *SpredisSDifference(SpredisSetCont **sets, int count);
+// SpredisSetCont *SpredisSUnion(SpredisSetCont **sets, int count);
 
 void * _SpredisInitSet();
+void SPSetCommandInit();
 void _SpredisDestroySet(void *dhash);
 void SpredisSetRDBSave(RedisModuleIO *io, void *ptr);
 void SpredisSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value);

@@ -18,8 +18,13 @@ typedef struct _SPColFns {
 typedef struct SpredisColumnData {
     SPScoreCont **cols;
     // void **colPtrs;
+    khash_t(SCORE) **sets;
     int *orders;
+    void **inputs;
+    void (**resolve)(double , void *, double *);
     int colCount;
+    double *max;
+    double *min;
     // SPColFns **colFns;
     // double (**getScore)(uint32_t);
     // void (**protect)();
@@ -38,6 +43,7 @@ typedef struct SpredisColumnData {
 // int SpredisFetchColumnsAndOrders(RedisModuleCtx *ctx, RedisModuleString **argv, SpredisColumnData *mcd, int argOffset);
 void SpredisZsetMultiKeySortInit();
 int SpredisZsetMultiKeySort_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+int SpredisExprResolve_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 // int SpredisStoreLexRange_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 // int SpredisStoreRangeByScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 

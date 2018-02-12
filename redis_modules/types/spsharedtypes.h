@@ -11,6 +11,7 @@
 #define SPIntScoreComp(a,b) (((uint64_t)(a).score < (uint64_t)(b).score) ? -1 : (((uint64_t)(b).score < (uint64_t)(a).score) ? 1 : kb_generic_cmp((a).id, (b).id)))
 
 typedef uint8_t SPHashValueType;
+typedef uint8_t SPExpResolverType;
 typedef uint64_t SPPtrOrD_t;
 typedef kvec_t(SPPtrOrD_t) SPPtrOrD;
 
@@ -45,7 +46,8 @@ typedef struct _SPScoreKey {
 } SPScoreKey;
 
 
-
+#define SPGeoExpType 0
+#define SPMathExpType 1
 
 #define SPHashStringType 0
 #define SPHashDoubleType 1

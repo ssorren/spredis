@@ -118,7 +118,7 @@ void *SpredisHashRDBLoad(RedisModuleIO *io, int encver) {
 	return cont;
 }
 
-void SpredisHashFreeCallback(void *value) {
+void SpredisHashDestroy(void *value) {
 	if (value == NULL) return;
 	SPHashCont *cont = value;
 	SPPtrOrD_t t;
@@ -142,6 +142,15 @@ void SpredisHashFreeCallback(void *value) {
 
 }
 
+
+void SpredisHashFreeCallback(void *value) {
+    if (value == NULL) return;
+    SP_TWORK(SpredisHashDestroy, value, {
+        //do nothing
+    });
+
+}
+
 int SpredisHashSet(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, SPHashValueType valueType) {
 	if (argc < 5) return RedisModule_WrongArity(ctx);
     int argOffset = 2;
@@ -154,7 +163,7 @@ int SpredisHashSet(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, SPHa
             REDISMODULE_WRITE);
     int keyType;
     if (HASH_NOT_EMPTY_AND_WRONGTYPE(key, &keyType, SPHASHTYPE) != 0) {
-    	RedisModule_CloseKey(key);
+    	// RedisModule_CloseKey(key);
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);   
     }
 
@@ -164,7 +173,7 @@ int SpredisHashSet(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, SPHa
     } else {
     	cont = RedisModule_ModuleTypeGetValue(key);
     	if (cont->valueType != valueType) {
-    		RedisModule_CloseKey(key);
+    		// RedisModule_CloseKey(key);
     		return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
     	}
     }
@@ -214,7 +223,7 @@ int SpredisHashSet(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, SPHa
     kv_destroy(ids);
     kv_destroy(poss);
     kv_destroy(ptrs);
-    RedisModule_CloseKey(key);
+    // RedisModule_CloseKey(key);
     if (!errorCondition) RedisModule_ReplyWithLongLong(ctx, setCount);
 	return REDISMODULE_OK;
 }
@@ -265,7 +274,7 @@ int SpredisHashDel_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, i
             REDISMODULE_WRITE);
     int keyType;
     if (HASH_NOT_EMPTY_AND_WRONGTYPE(key, &keyType, SPHASHTYPE) != 0) {
-    	RedisModule_CloseKey(key);
+    	// RedisModule_CloseKey(key);
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);   
     }
 
@@ -312,7 +321,7 @@ int SpredisHashDel_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, i
     }
     kv_destroy(ids);
     kv_destroy(poss);
-    RedisModule_CloseKey(key);
+    // RedisModule_CloseKey(key);
 	RedisModule_ReplyWithLongLong(ctx, delCount);
 	RedisModule_ReplicateVerbatim(ctx);
 	return REDISMODULE_OK;

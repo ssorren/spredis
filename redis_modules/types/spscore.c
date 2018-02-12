@@ -95,7 +95,10 @@ void *SpredisZSetRDBLoad(RedisModuleIO *io, int encver) {
 void SpredisZSetFreeCallback(void *value) {
     if (value == NULL) return;
     SPScoreCont *dhash = value;
-    SPScoreContDestroy(dhash);
+    // SPScoreContDestroy(dhash);
+    SP_TWORK(SPScoreContDestroy, dhash, {
+        //do nothing
+    });
 }
 
 
@@ -171,7 +174,7 @@ int SpredisZSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, i
         argIndex++;
         int scoreRes = RedisModule_StringToDouble(argv[argIndex++], &(scores[i]));
         if (scoreRes != REDISMODULE_OK) {
-        	RedisModule_CloseKey(key);
+        	// RedisModule_CloseKey(key);
             return RedisModule_ReplyWithError(ctx, "ERR Could not convert score to double");
         }
     }
@@ -195,7 +198,7 @@ int SpredisZSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, i
     // int found = hashmap_get(dhash, id, (void **)&d);
 
     /* if we've aleady seen this id, just set the score */
-    RedisModule_CloseKey(key);
+    // RedisModule_CloseKey(key);
     RedisModule_ReplyWithLongLong(ctx, setCount);
     RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;
@@ -214,7 +217,7 @@ int SpredisZSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
     }
     if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_ReplyWithNull(ctx);
-        RedisModule_CloseKey(key);
+        // RedisModule_CloseKey(key);
         return REDISMODULE_OK;
     }
     SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
@@ -228,7 +231,7 @@ int SpredisZSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
 	} else {
 		RedisModule_ReplyWithNull(ctx);
 	}
-    RedisModule_CloseKey(key);
+    // RedisModule_CloseKey(key);
     SpredisUnProtectMap(cont);
     return REDISMODULE_OK;
 }
@@ -245,7 +248,7 @@ int SpredisZSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, 
     }
     if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_ReplyWithLongLong(ctx, 0);
-        RedisModule_CloseKey(key);
+        // RedisModule_CloseKey(key);
         return REDISMODULE_OK;
     }
 
@@ -253,7 +256,7 @@ int SpredisZSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, 
     SpredisProtectReadMap(dhash);
     RedisModule_ReplyWithLongLong(ctx,kh_size(dhash->set));
     SpredisUnProtectMap(dhash);
-    RedisModule_CloseKey(key);
+    // RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }
 
@@ -268,7 +271,7 @@ int SpredisZSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, i
     }
     if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_ReplyWithLongLong(ctx,0);
-        RedisModule_CloseKey(key);
+        // RedisModule_CloseKey(key);
         return REDISMODULE_OK;
     }
 
@@ -295,7 +298,7 @@ int SpredisZSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, i
         RedisModule_DeleteKey(key);
     }
 
-    RedisModule_CloseKey(key);
+    // RedisModule_CloseKey(key);
     // RedisModule_ReplyWithLongLong(ctx, (remRes == MAP_OK) ? 1 : 0);
     RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;

@@ -93,7 +93,11 @@ void SpredisZLexSetFreeCallback(void *value) {
 
     SPScoreCont *dhash = value;
 
-    SPLexScoreContDestroy(dhash);
+    // SPLexScoreContDestroy(dhash);
+
+    SP_TWORK(SPLexScoreContDestroy, dhash, {
+        //do nothing
+    });
 }
 
 
@@ -182,7 +186,7 @@ int SpredisZLexSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
         argIndex++;
         int scoreRes = RedisModule_StringToDouble(argv[argIndex++], &(scores[i]));
         if (scoreRes != REDISMODULE_OK) {
-        	RedisModule_CloseKey(key);
+        	// RedisModule_CloseKey(key);
             return RedisModule_ReplyWithError(ctx, "ERR Could not convert score to double");
         }
         argIndex++;
@@ -206,7 +210,7 @@ int SpredisZLexSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
         
     }
     /* if we've aleady seen this id, just set the score */
-    RedisModule_CloseKey(key);
+    // RedisModule_CloseKey(key);
     RedisModule_ReplyWithLongLong(ctx, setCount);
     RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;
@@ -225,7 +229,7 @@ int SpredisZLexSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **ar
     }
     if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_ReplyWithNull(ctx);
-        RedisModule_CloseKey(key);
+        // RedisModule_CloseKey(key);
         return REDISMODULE_OK;
     }
     SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
@@ -239,7 +243,7 @@ int SpredisZLexSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **ar
 	} else {
 		RedisModule_ReplyWithNull(ctx);
 	}
-    RedisModule_CloseKey(key);
+    // RedisModule_CloseKey(key);
     SpredisUnProtectMap(cont);
     return REDISMODULE_OK;
 }
@@ -257,7 +261,7 @@ int SpredisZLexSetApplySortScores_RedisCommand(RedisModuleCtx *ctx, RedisModuleS
     }
     if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_ReplyWithNull(ctx);
-        RedisModule_CloseKey(key);
+        // RedisModule_CloseKey(key);
         return REDISMODULE_OK;
     }
     SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
@@ -277,7 +281,7 @@ int SpredisZLexSetApplySortScores_RedisCommand(RedisModuleCtx *ctx, RedisModuleS
 		kb_itr_next(LEX, cont->btree, &itr);
     }
     RedisModule_ReplyWithSimpleString(ctx, "OK");
-    RedisModule_CloseKey(key);
+    // RedisModule_CloseKey(key);
     SpredisUnProtectMap(cont);
     RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;
@@ -294,7 +298,7 @@ int SpredisZLexSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **arg
     }
     if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_ReplyWithLongLong(ctx, 0);
-        RedisModule_CloseKey(key);
+        // RedisModule_CloseKey(key);
         return REDISMODULE_OK;
     }
 
@@ -302,7 +306,7 @@ int SpredisZLexSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **arg
     SpredisProtectReadMap(dhash);
     RedisModule_ReplyWithLongLong(ctx,kh_size(dhash->set));
     SpredisUnProtectMap(dhash);
-    RedisModule_CloseKey(key);
+    // RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }
 
@@ -317,7 +321,7 @@ int SpredisZLexSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
     }
     if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_ReplyWithLongLong(ctx,0);
-        RedisModule_CloseKey(key);
+        // RedisModule_CloseKey(key);
         return REDISMODULE_OK;
     }
 
@@ -331,7 +335,7 @@ int SpredisZLexSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
         RedisModule_DeleteKey(key);
     }
 
-    RedisModule_CloseKey(key);
+    // RedisModule_CloseKey(key);
     RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;
 }

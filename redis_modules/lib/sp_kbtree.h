@@ -44,12 +44,12 @@
 
 
 typedef struct {
-	int32_t is_internal:1, n:31;
+	uint32_t is_internal:1, n:31;
 } kbnode_t;
 
 typedef struct {
 	kbnode_t *x;
-	int i;
+	uint32_t i;
 } kbpos_t;
 
 typedef struct {
@@ -62,30 +62,11 @@ typedef struct {
 #define KB_TYPE(name)						\
 	typedef struct {							\
 		kbnode_t *root;							\
-		int	off_key, off_ptr, ilen, elen;		\
-		int	n, t;								\
-		int	n_keys, n_nodes;					\
+		uint32_t	off_key, off_ptr, ilen, elen;		\
+		uint32_t	n, t;								\
+		uint32_t	n_keys, n_nodes;					\
 	} kbtree_##name##_t;
 
-/*
-#define __KB_PROTOTYPES(name, key_t)	 					\
-extern kbtree_##name##_t *kb_init_##name(int size);							\
-extern int __kb_getp_aux_##name(const kbnode_t * __restrict x, const key_t * __restrict k, int *r); \
-extern key_t *kb_getp_##name(kbtree_##name##_t *b, const key_t * __restrict k); \
-extern void kb_intervalp_##name(kbtree_##name##_t *b, const key_t * __restrict k, key_t **lower, key_t **upper); \
-extern void kb_interval_##name(kbtree_##name##_t *b, const key_t k, key_t **lower, key_t **upper); \
-extern void __kb_split_##name(kbtree_##name##_t *b, kbnode_t *x, int i, kbnode_t *y); \
-extern key_t *__kb_putp_aux_##name(kbtree_##name##_t *b, kbnode_t *x, const key_t * __restrict k); \
-extern key_t *kb_putp_##name(kbtree_##name##_t *b, const key_t * __restrict k); \
-extern key_t *kb_putp_##name(kbtree_##name##_t *b, const key_t * __restrict k); \
-extern void kb_put_##name(kbtree_##name##_t *b, const key_t k); \
-extern key_t __kb_delp_aux_##name(kbtree_##name##_t *b, kbnode_t *x, const key_t * __restrict k, int s); \
-extern key_t kb_delp_##name(kbtree_##name##_t *b, const key_t * __restrict k); \
-extern key_t kb_del_##name(kbtree_##name##_t *b, const key_t k); \
-extern void kb_itr_first_##name(kbtree_##name##_t *b, kbitr_t *itr); \
-extern int kb_itr_get_##name(kbtree_##name##_t *b, const key_t * __restrict k, kbitr_t *itr); \
-extern int kb_itr_next_##name(kbtree_##name##_t *b, kbitr_t *itr); \
-*/
 
 #ifndef kh_inline
 #ifdef _MSC_VER

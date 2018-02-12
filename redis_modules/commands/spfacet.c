@@ -39,14 +39,14 @@ typedef struct _SPFacetData {
 
 
 
-static threadpool SPFacetPoolFast;
-static threadpool SPFacetPoolSlow;
-static threadpool SPFacetPoolReallySlow;
+// static threadpool SPFacetPoolFast;
+// static threadpool SPFacetPoolSlow;
+// static threadpool SPFacetPoolReallySlow;
 
 void SpredisFacetInit() {
-	SPFacetPoolFast = thpool_init(SP_FAST_TPOOL_SIZE);
-	SPFacetPoolSlow = thpool_init(SP_SLOW_TPOOL_SIZE);
-	SPFacetPoolReallySlow = thpool_init(SP_RLYSLOW_TPOOL_SIZE);
+	// SPFacetPoolFast = thpool_init(SP_FAST_TPOOL_SIZE);
+	// SPFacetPoolSlow = thpool_init(SP_SLOW_TPOOL_SIZE);
+	// SPFacetPoolReallySlow = thpool_init(SP_RLYSLOW_TPOOL_SIZE);
 }
 
 typedef struct _SPThreadedFacetArg {
@@ -54,7 +54,7 @@ typedef struct _SPThreadedFacetArg {
 	SPFacetData **facets;
 	unsigned int facetCount;
 	SpredisSortData **datas;
-	unsigned int dataCount;
+	size_t dataCount;
 } SPThreadedFacetArg;
 
 int SpedisPrepareFacetResult(SPFacetData** facets, int facetCount);
@@ -64,29 +64,16 @@ void __SPCloseAllFacets(SPFacetData** facets, int keyCount) {
 	for (int i = 0; i < keyCount; ++i)
     {
 	    SPFacetData *facet = facets[i];
-	    
-
-
-	    	// kh_destroy(SPREDISFACET, facet->valMap);
 	    if (facet->results != NULL) {
-	    	// for (int k = 0; k < facet->count; ++k)
-	    	// {
-	    	// 	RedisModule_Free(facet->results[k]);
-	    	// }
 	    	RedisModule_Free(facet->results);
 	    }
 	    if (facet->valMap != NULL) {
 	    	SPFacetResult *current, *tmp;
 
 	    	HASH_ITER(hh, facet->valMap, current, tmp) {
-				HASH_DEL(facet->valMap,current);//   delete; users advances to next 
-				RedisModule_Free(current);            /* optional- if you want to free  */
+				HASH_DEL(facet->valMap,current);
+				RedisModule_Free(current);
 			};
-			// HASH_CLEAR(hh, facet->valMap);
-			// if (facet->valMap != NULL) {
-			// 	RedisModule_Free(facet->valMap);	
-			// }
-	    	// 
 	    }
 	    RedisModule_Free(facet);
     }
@@ -109,16 +96,24 @@ int SPThreadedFacet_timeout_func(RedisModuleCtx *ctx, RedisModuleString **argv,
 
 void SPThreadedFacet_FreePriv(void *prv)
 {	
-    // return RedisModule_ReplyWithNull(ctx);
 	SPThreadedFacetArg *targ = prv;
 	__SPCloseAllFacets(targ->facets, targ->facetCount);
+	RedisModule_Free(targ);
 }
+
+typedef struct {
+	SPFacetData **facets;
+	SpredisSortData *d;
+	SPFacetResult **valMaps;
+	uint8_t facetCount;
+	size_t start, end;
+} SPPopFacetArg;
 
 void SPThreadedFacet(void *arg) {
 	SPThreadedFacetArg *targ = arg;
 
 	SpredisSortData **datas = targ->datas;
-	unsigned int dSize = targ->dataCount;
+	size_t dSize = targ->dataCount;
 	SPFacetData **facets = targ->facets;
 	SpredisSortData *d;
 	SPFacetData *facet;
@@ -252,17 +247,8 @@ int SpedisBuildFacetResult(RedisModuleCtx *ctx, SPFacetData** facets, int facetC
 	return REDISMODULE_OK;
 }
 
-typedef struct {
-    const char *key;
-    int count;
-} elem_t;
-
-// #define elem_cmp(a, b) (strcmp((a).key, (b).key))
-// KBTREE_INIT(str, elem_t, elem_cmp)
-
 int SpredisFacets_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 	RedisModule_AutoMemory(ctx);
-	// long long startTimer = RedisModule_Milliseconds();
 
 	if (argc < 5) return RedisModule_WrongArity(ctx);
     int argOffset = 2;
@@ -276,7 +262,7 @@ int SpredisFacets_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
     }
     SpredisTempResult *res = RedisModule_ModuleTypeGetValue(key);
-    RedisModule_CloseKey(key);
+    // RedisModule_CloseKey(key);
     int argI = argOffset;
     /** populate **/
     int ok = REDISMODULE_OK;
@@ -292,22 +278,13 @@ int SpredisFacets_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
 	//2: allocate all the facets
 	SPFacetData *facet;
 	for (i = 0; i < keyCount; ++i) {
-		// can't use RedisModule_PoolAlloc as these are traveling to a different thread
-		// facet = 
 	    facets[i] = RedisModule_Calloc(1, sizeof(SPFacetData));//facet;
-	    // facet->valMap = kh_init(SPREDISFACET);
-
-	    // facet->valMap = NULL;
-	    // facet->results = NULL;
-	    // facet->count = 0;
-	    // facet->replyCount = 0;
 	}
 	//3: get the base information for each facet
 	argI = argOffset;
     for (i = 0; i < keyCount; ++i)
     {
 	    facet = facets[i];
-	    // facet->keyName = argv[argI];
 	    argI++;
 	    ok = RedisModule_StringToLongLong(argv[argI++], &(facet->replyCount));
 	    if (ok == REDISMODULE_ERR) {
@@ -324,9 +301,7 @@ int SpredisFacets_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
 	    facet->col = RedisModule_ModuleTypeGetValue(keys[i]);
 	    facet->type = SPHASHTYPE;
     }
-    //4: let's not forget to close all the keys, 
     //   we won't need to keep them open on the facet thread as they are thread read safe
-    for (i = 0; i < keyCount; ++i) if (keys[i] != NULL) RedisModule_CloseKey(keys[i]);
     /** end populalate **/
     if (ok == REDISMODULE_OK) {
     	/** let's build these on another thread and free up redis to serve more requests **/
@@ -341,14 +316,12 @@ int SpredisFacets_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
 		targ->datas = res->data;
 		targ->dataCount = res->size;
 
-		threadpool pool = SPFacetPoolFast;
-		if (targ->dataCount > SP_SLOW_THRESHOLD) pool = (targ->dataCount > SP_REALLY_SLOW_THRESHOLD) ? SPFacetPoolReallySlow : SPFacetPoolSlow;
-	    if (thpool_add_work(pool, (void*)SPThreadedFacet, targ) != 0) {
-	    	printf("could not create thread..No soup for you!\n");
+	     SP_TWORK(SPThreadedFacet, targ, {
+	        printf("could not create thread..No soup for you!\n");
 	    	RedisModule_AbortBlock(bc);
 	    	__SPCloseAllFacets(facets, keyCount);
 	    	RedisModule_ReplyWithNull(ctx);
-	    }
+	    });
   
     } else {
     	__SPCloseAllFacets(facets, keyCount);

@@ -2,7 +2,7 @@
 #define __SPREDIS_UTIL
 
 #include <math.h>
-
+#include <unistd.h>
 // #define R 6371
 typedef struct _SPLatLong {
     double lat;
@@ -34,12 +34,9 @@ static inline double  SPGetDist(double alat, double alon, double blat, double bl
 }
 
 
-#define SpredisProtectWriteMap(map) pthread_rwlock_wrlock(&map->mutex)
+#define SpredisProtectWriteMap(map) {while (pthread_rwlock_trywrlock(&map->mutex)) {sleep(1);}}
 #define SpredisProtectReadMap(map) pthread_rwlock_rdlock(&map->mutex)
 #define SpredisUnProtectMap(map) pthread_rwlock_unlock(&map->mutex)
-#define SpredisProtectBigWriteMap(map) pthread_rwlock_unlock(&map->bigLock)
-#define SpredisProtectBigReadMap(map) pthread_rwlock_rdlock(&map->bigLock)
-#define SpredisUnProtectBigMap(map) pthread_rwlock_unlock(&map->bigLock)
 
 typedef struct {
     void *left, *right;
