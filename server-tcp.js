@@ -4,7 +4,7 @@
 const cluster = require('cluster');
 const numCPUs = require('os').cpus().length;
 
-module.exports = function () {
+module.exports = function (config) {
   if (cluster.isMaster && numCPUs > 1) {
     console.log(`Master ${process.pid} is running`);
 
@@ -22,7 +22,7 @@ module.exports = function () {
     const Spredis = require('./lib/spredis/Spredis');
     const spredis = new Spredis();
     spredis.initialize().then( () => {
-      worker();
+      worker(config);
     });
     
 
