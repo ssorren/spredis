@@ -315,14 +315,14 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
         .score = min
     };
     kb_intervalp(SCORE, testScore, &t, &l, &u);
-    if (l == NULL) {
-        RedisModule_ReplyWithLongLong(ctx,0);
-        // RedisModule_CloseKey(key);
-        // RedisModule_CloseKey(store);
-        // RedisModule_CloseKey(hintKey);
-        SPUnlockContext(ctx);
-        return REDISMODULE_OK;
-    }
+    // if (l == NULL) {
+    //     RedisModule_ReplyWithLongLong(ctx,0);
+    //     // RedisModule_CloseKey(key);
+    //     // RedisModule_CloseKey(store);
+    //     // RedisModule_CloseKey(hintKey);
+    //     SPUnlockContext(ctx);
+    //     return REDISMODULE_OK;
+    // }
     int shouldIntersore = 0;
     if (hint != NULL && (min == -HUGE_VAL || max == HUGE_VAL || kh_size(hint) < kb_size(testScore) / 5)) { //at some point it is not faster to intersore first
     	shouldIntersore = 1;
@@ -356,7 +356,11 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
 
 
     } else if (hint == NULL) { //more wordy, but also more efficient to do one if statement rather tht 1 per iteration
-        kb_itr_getp(SCORE, testScore, l, &itr);
+        if (l != NULL) {
+            kb_itr_getp(SCORE, testScore, l, &itr);
+        } else {
+            kb_itr_first(SCORE, testScore, &itr);
+        }
         for (; kb_itr_valid(&itr); kb_itr_next(SCORE, testScore, &itr)) { // move on
             cand = (&kb_itr_key(SPScoreKey, &itr))->value;
             if (cand) {
@@ -372,7 +376,11 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
         }		
    	} else {
    		// khint_t k;
-        kb_itr_getp(SCORE, testScore, l, &itr);
+        if (l != NULL) {
+            kb_itr_getp(SCORE, testScore, l, &itr);
+        } else {
+            kb_itr_first(SCORE, testScore, &itr);
+        }
         for (; kb_itr_valid(&itr); kb_itr_next(SCORE, testScore, &itr)) { // move on
             cand = (&kb_itr_key(SPScoreKey, &itr))->value;
             if (cand) {
