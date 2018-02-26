@@ -200,6 +200,11 @@ int SpredisStoreRangeByRadius_RedisCommand(RedisModuleCtx *ctx, RedisModuleStrin
             return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
         }
         hintCont = RedisModule_ModuleTypeGetValue(hintKey);
+        if (hintCont == NULL) {
+            // SPUnlockContext(ctx);
+            RedisModule_ReplyWithLongLong(ctx,0);
+            return REDISMODULE_OK;
+        }
         // if (hintCont != NULL) {
         //     hint = hintCont->set;
         // }
@@ -286,10 +291,17 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
     		// RedisModule_CloseKey(key);
 		    // RedisModule_CloseKey(store);
 		    // RedisModule_CloseKey(hintKey);
+            SPUnlockContext(ctx);
 		    return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
     	}
     	hintCont = RedisModule_ModuleTypeGetValue(hintKey);
-    	if (hintCont != NULL) hint = hintCont->set;
+    	if (hintCont != NULL) {
+            hint = hintCont->set;
+        } else {
+            SPUnlockContext(ctx);
+            RedisModule_ReplyWithLongLong(ctx,0);
+            return REDISMODULE_OK;
+        }
     }
 
     SPScoreCont *testScoreCont = RedisModule_ModuleTypeGetValue(key);
@@ -476,6 +488,10 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
         hintCont = RedisModule_ModuleTypeGetValue(hintKey);
         if (hintCont != NULL) {
             hint = hintCont->set;
+        } else {
+            SPUnlockContext(ctx);
+            RedisModule_ReplyWithLongLong(ctx,0);
+            return REDISMODULE_OK;
         }
     }
 
