@@ -666,11 +666,6 @@ static kh_inline khint_t __ac_Wang_hash(khint_t key)
     } \
 }
 
-	// for (__i = kh_begin(h); __i != kh_end(h); ++__i) {		\
-	// 	if (!kh_exist(h,__i)) continue;						\
-	// 	(vvar) = kh_val(h,__i);								\
-	// 	code;												\
-	// } }
 
 /* More conenient interfaces */
 

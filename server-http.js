@@ -2,10 +2,10 @@ const cluster = require('cluster');
 const numCPUs = require('os').cpus().length;
 
 const postCommands = [
+	'search',
 	'addDocuments',
 	'deleteDocuments',
-	'namespaceConfig',
-	'search'
+	'namespaceConfig'
 ];
 
 const Spredis = require('./lib/spredis/Spredis');

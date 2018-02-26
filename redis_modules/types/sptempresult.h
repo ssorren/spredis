@@ -7,10 +7,6 @@
 
 // void __SPFreeSortData(SpredisSortData *sd);
 
-// #define SPKLMEMPOOLFREE(sd) do { \
-// 	if ((sd)->scores != NULL) RedisModule_Free((sd)->scores); \
-//     RedisModule_Free(sd); \
-// } while(0);
 
 // KMEMPOOL_INIT(SORTDATA, SpredisSortData, SPKLMEMPOOLFREE);	
 
