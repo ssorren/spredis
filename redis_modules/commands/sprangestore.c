@@ -420,6 +420,20 @@ int SpredisStoreRangeByScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString
     return SPThreadedWork(ctx, argv, argc, SpredisStoreRangeByScore_RedisCommandT);
 }
 
+RedisModuleString * SP_RESOLVE_WILDCARD(RedisModuleCtx *ctx, RedisModuleString *string) {
+    size_t len;
+    const char *str = RedisModule_StringPtrLen(string,&len);
+    if(len > 4 && !strcmp(str + len - 4, "\\xff")) {
+        // printf("Creating wildcard\n");
+        char *new_str = RedisModule_Calloc(len - 3, sizeof(char));
+        strncpy(new_str, str, len - 4);
+        // printf("Wildcard: %s%c\n", new_str , 0xff);
+        string = RedisModule_CreateStringPrintf(ctx, "%s%c", new_str ,0xff);
+        RedisModule_Free(new_str);
+    }
+    return string;
+}
+
 int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // RedisModule_AutoMemory(ctx); /* Use automatic memory management. */
     // const char DELIM = ';';
@@ -453,7 +467,7 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     }
 
     const unsigned char * gtCmp = (const unsigned char *)RedisModule_StringPtrLen(argv[4], NULL);
-    const unsigned char * ltCmp = (const unsigned char *)RedisModule_StringPtrLen(argv[5], NULL);
+    const unsigned char * ltCmp = (const unsigned char *)RedisModule_StringPtrLen(SP_RESOLVE_WILDCARD(ctx, argv[5]), NULL);
 
     int (*GT)(int) = SP_LEXGTCMP(gtCmp);
     int (*LT)(int) = SP_LEXLTCMP(ltCmp);
@@ -467,6 +481,9 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     if ( ltLen > 0 && ( (unsigned char)(ltCmp[ ltLen - 1 ]) - 0xff) < 0) {
         ltLen += 1;
         gtLen += 1;
+        // printf("Don't Hava wildcard, %zu, %zu\n", ltLen, gtLen);
+    } else {
+        // printf("Hava wildcard, %s,%s,%zu, %zu\n", ltCmp, gtCmp, ltLen, gtLen);
     }
 
     RedisModuleString *hintName = argv[3];
@@ -518,13 +535,14 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     kb_intervalp(LEX, testLex, &t, &l, &u);
     SPUnlockContext(ctx);
 
-    if (l == NULL) {
-        RedisModule_ReplyWithLongLong(ctx,0);
-        // RedisModule_CloseKey(key);
-        // RedisModule_CloseKey(store);
-        // RedisModule_CloseKey(hintKey);
-        return REDISMODULE_OK;
-    }
+    // if (l == NULL) {
+    //     // printf("WTF1111, %d\n", u == NULL);
+    //     RedisModule_ReplyWithLongLong(ctx,0);
+    //     // RedisModule_CloseKey(key);
+    //     // RedisModule_CloseKey(store);
+    //     // RedisModule_CloseKey(hintKey);
+    //     return REDISMODULE_OK;
+    // }
 
     int shouldIntersore = 0;
     if (hint != NULL && ltLen < 3 && (kh_size(hint) < (kb_size(testLex) / 2))) { //at some point it is not faster to intersore first
@@ -545,7 +563,12 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
         });
     } else {
         int reached = 0;
-        kb_itr_getp(LEX, testLex, l, &itr); // get an iterator pointing to the first
+        if (l != NULL) {
+            kb_itr_getp(LEX, testLex, l, &itr); // get an iterator pointing to the first    
+        } else {
+            kb_itr_first(LEX, testLex, &itr);
+        }
+        
         if (hint == NULL) { //wordy to do it this way bu way more efficient
             for (; kb_itr_valid(&itr); kb_itr_next(LEX, testLex, &itr)) { // move on
                 cand = (&kb_itr_key(SPScoreKey, &itr))->value;
