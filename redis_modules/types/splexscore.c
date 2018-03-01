@@ -124,7 +124,7 @@ int SPLexScorePutValue(SPScoreCont *cont, spid_t id, const char *lexValue, doubl
     	score = kh_value(cont->set, k);
     	if (strcmp(score->lex, lexValue ) != 0) {
     		search.id = score->id;
-    		search.score = (uint64_t)score->lex;
+    		search.score = (SPPtrOrD_t)score->lex;
     		oldKey = kb_getp(LEX, cont->btree, &search);
     		if (oldKey) {
 				kb_delp(LEX, cont->btree, oldKey);
@@ -145,21 +145,18 @@ int SPLexScorePutValue(SPScoreCont *cont, spid_t id, const char *lexValue, doubl
 int SPLexScoreDel(SPScoreCont *cont, spid_t id) {
 	SpredisProtectWriteMap(cont);
 	SPScore *score;
-	SPScoreKey *key = NULL;
-	// kbtree_t(LEX)* tree = cont->btree;;
 	khint_t k;
 	int res = 0;
 	k = kh_get(LEX, cont->set, id);
 	if (k != kh_end(cont->set)) {
 		score = kh_value(cont->set, k);
-		SPScoreKey search = {.id=score->id, .score=(uint64_t)score->lex};
-		key = kb_getp(LEX, cont->btree, &search);		
-		if (key) {
-			kb_delp(LEX, cont->btree, key);
-		}
-		if (score->lex) RedisModule_Free(score->lex);
-		kh_del_key_value(LEX, cont->set, k, score, 1);
-		res = 1;
+        if (score != NULL) {
+            SPScoreKey search = {.id=score->id, .score=(SPPtrOrD_t)score->lex};
+            kb_delp(LEX, cont->btree, &search);
+            if (score->lex != NULL) RedisModule_Free(score->lex);
+            kh_del_key_value(LEX, cont->set, k, score, 1);
+            res = 1;    
+        }
 	}
 	SpredisUnProtectMap(cont);
 	return res;
@@ -332,6 +329,7 @@ int SpredisZLexSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
     RedisModule_ReplyWithLongLong(ctx,SPLexScoreDel(cont, id));
 
     if (kh_size(cont->set) == 0) {
+        printf("Deleting key\n");
         RedisModule_DeleteKey(key);
     }
 
