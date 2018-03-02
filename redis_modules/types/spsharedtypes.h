@@ -10,6 +10,10 @@
 #define SPScoreComp(a,b) (((double)(a).score < (double)(b).score) ? -1 : (((double)(b).score < (double)(a).score) ? 1 : kb_generic_cmp((a).id, (b).id)))
 #define SPIntScoreComp(a,b) (((uint64_t)(a).score < (uint64_t)(b).score) ? -1 : (((uint64_t)(b).score < (uint64_t)(a).score) ? 1 : kb_generic_cmp((a).id, (b).id)))
 
+#define SPScoreSetComp(a,b) kb_generic_cmp((a).score, (b).score)
+#define SPGeoSetComp(a,b)  kb_generic_cmp((a).score, (b).score)
+#define SPLexSetComp(a,b)  kb_str_cmp((a).lex, (b).lex)
+
 typedef uint8_t SPHashValueType;
 typedef uint8_t SPExpResolverType;
 typedef uint64_t SPPtrOrD_t;
@@ -60,13 +64,15 @@ typedef struct _SPHashValue {
     struct _SPHashValue *next, *prev;
 } SPHashValue;
 
-
 // extern int SPLexScoreComp(SPScoreKey a, SPScoreKey b);
 
 static inline int SPLexScoreComp(SPScoreKey a, SPScoreKey b) {
     int res = strcmp((char *)a.score,(char *)b.score);
     return  res ? res : (((a).id < (b).id) ? -1 : (((b).id < (a).id) ? 1 : 0 ));
 }
+
+
+
 
 static inline int SPGeoScoreComp(SPScoreKey a, SPScoreKey b) {
     int res = memcmp(&a.score,&b.score,8);
@@ -82,6 +88,26 @@ typedef kbtree_t(SCORE) kbtree_t(GEO);
 
 KHASH_DECLARE_SET(SIDS, spid_t);
 KHASH_DECLARE(SCORE, spid_t, SPScore*);
+
+
+typedef struct _SPLexSetKey
+{
+    char *lex;
+    khash_t(SIDS);
+} SPLexSetKey;
+
+typedef struct _SPScoreSetKey
+{
+    double score;
+    khash_t(SIDS);
+} SPScoreSetKey;
+
+typedef struct _SPGeoSetKey
+{
+    uint64_t score;
+    khash_t(SIDS);
+} SPGeoSetKey;
+
 // KHASH_DECLARE(LEX, spid_t, SPScore*);
 typedef khash_t(SCORE) khash_t(LEX);
 
@@ -100,6 +126,11 @@ KHASH_MAP_INIT_INT64(LEX, SPScore*);
 KBTREE_INIT(SCORE, SPScoreKey, SPScoreComp);
 KBTREE_INIT(LEX, SPScoreKey, SPLexScoreComp);
 KBTREE_INIT(GEO, SPScoreKey, SPIntScoreComp);
+
+
+KBTREE_INIT(SCORESET, SPScoreSetKey, SPScoreSetComp);
+KBTREE_INIT(LEXSET, SPLexSetKey, SPLexSetComp);
+KBTREE_INIT(GEOSET, SPGeoSetKey, SPGeoSetComp);
 // KBTREE_INIT(REVGEO, SPScoreKey, SPGeoScoreComp);
 
 // SPSCORE_BTREE_INIT(SCORE);
