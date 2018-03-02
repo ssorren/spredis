@@ -93,19 +93,19 @@ KHASH_DECLARE(SCORE, spid_t, SPScore*);
 typedef struct _SPLexSetKey
 {
     char *lex;
-    khash_t(SIDS);
+    khash_t(SIDS) *set;
 } SPLexSetKey;
 
 typedef struct _SPScoreSetKey
 {
     double score;
-    khash_t(SIDS);
+    khash_t(SIDS) *set;
 } SPScoreSetKey;
 
 typedef struct _SPGeoSetKey
 {
     uint64_t score;
-    khash_t(SIDS);
+    khash_t(SIDS) *set;
 } SPGeoSetKey;
 
 // KHASH_DECLARE(LEX, spid_t, SPScore*);
@@ -127,7 +127,9 @@ KBTREE_INIT(SCORE, SPScoreKey, SPScoreComp);
 KBTREE_INIT(LEX, SPScoreKey, SPLexScoreComp);
 KBTREE_INIT(GEO, SPScoreKey, SPIntScoreComp);
 
-
+KB_TYPE(SCORESET);
+KB_TYPE(LEXSET);
+KB_TYPE(GEOSET);
 KBTREE_INIT(SCORESET, SPScoreSetKey, SPScoreSetComp);
 KBTREE_INIT(LEXSET, SPLexSetKey, SPLexSetComp);
 KBTREE_INIT(GEOSET, SPGeoSetKey, SPGeoSetComp);
