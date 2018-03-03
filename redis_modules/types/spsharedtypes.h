@@ -10,9 +10,9 @@
 #define SPScoreComp(a,b) (((double)(a).score < (double)(b).score) ? -1 : (((double)(b).score < (double)(a).score) ? 1 : kb_generic_cmp((a).id, (b).id)))
 #define SPIntScoreComp(a,b) (((uint64_t)(a).score < (uint64_t)(b).score) ? -1 : (((uint64_t)(b).score < (uint64_t)(a).score) ? 1 : kb_generic_cmp((a).id, (b).id)))
 
-#define SPScoreSetComp(a,b) kb_generic_cmp((a).score, (b).score)
-#define SPGeoSetComp(a,b)  kb_generic_cmp((a).score, (b).score)
-#define SPLexSetComp(a,b)  kb_str_cmp((a).lex, (b).lex)
+#define SPScoreSetComp(a,b) kb_generic_cmp((double)((a).value), (double)((b).value))
+#define SPGeoSetComp(a,b)  kb_generic_cmp((uint64_t)((a).value), (uint64_t)((b).value))
+#define SPLexSetComp(a,b)  kb_str_cmp((char *)((a).value), (char *)((b).value))
 
 typedef uint8_t SPHashValueType;
 typedef uint8_t SPExpResolverType;
@@ -90,23 +90,30 @@ KHASH_DECLARE_SET(SIDS, spid_t);
 KHASH_DECLARE(SCORE, spid_t, SPScore*);
 
 
-typedef struct _SPLexSetKey
-{
-    char *lex;
+// typedef struct _SPLexSetKey
+// {
+//     char *lex;
+//     spid_t singleValue;
+//     khash_t(SIDS) *set;
+// } SPLexSetKey;
+typedef struct _SPScoreSetCont {
+    double score;
+    spid_t singleId;
     khash_t(SIDS) *set;
-} SPLexSetKey;
+} SPScoreSetCont;
 
 typedef struct _SPScoreSetKey
 {
-    double score;
-    khash_t(SIDS) *set;
+    SPPtrOrD_t value;
+    SPScoreSetCont *scoreSet;
 } SPScoreSetKey;
 
-typedef struct _SPGeoSetKey
-{
-    uint64_t score;
-    khash_t(SIDS) *set;
-} SPGeoSetKey;
+// typedef struct _SPGeoSetKey
+// {
+//     uint64_t score;
+//     spid_t singleValue;
+//     khash_t(SIDS) *set;
+// } SPGeoSetKey;
 
 // KHASH_DECLARE(LEX, spid_t, SPScore*);
 typedef khash_t(SCORE) khash_t(LEX);
@@ -128,14 +135,45 @@ KBTREE_INIT(LEX, SPScoreKey, SPLexScoreComp);
 KBTREE_INIT(GEO, SPScoreKey, SPIntScoreComp);
 
 KB_TYPE(SCORESET);
-KB_TYPE(LEXSET);
-KB_TYPE(GEOSET);
+typedef kbtree_t(SCORESET) kbtree_t(LEXSET);
+typedef kbtree_t(SCORESET) kbtree_t(GEOSET);
+// KB_TYPE(LEXSET);
+// KB_TYPE(GEOSET);
+
 KBTREE_INIT(SCORESET, SPScoreSetKey, SPScoreSetComp);
-KBTREE_INIT(LEXSET, SPLexSetKey, SPLexSetComp);
-KBTREE_INIT(GEOSET, SPGeoSetKey, SPGeoSetComp);
+KBTREE_INIT(LEXSET, SPScoreSetKey, SPLexSetComp);
+KBTREE_INIT(GEOSET, SPScoreSetKey, SPGeoSetComp);
 // KBTREE_INIT(REVGEO, SPScoreKey, SPGeoScoreComp);
 
 // SPSCORE_BTREE_INIT(SCORE);
 // SPLEX_BTREE_INIT(LEX);
+#define SP_DOADD_SCORESET(type, ss, id, value) { \
+    SPScoreSetKey search = {.value = value}; \
+    SPScoreSetKey *key; \
+    SPScoreSetKey *found = kb_getp(type, ss, &search); \
+    int absent; \
+    if (found == NULL) { \
+        key = SP_CREATE_SCORE_SET_KEY(); \
+        key->value = value; \
+    } else { \
+        key = found; \
+    } \
+    if (key->scoreSet->singleId == 0 && key->scoreSet->set == NULL) { \
+        key->scoreSet->singleId = id; \
+    } else if (key->scoreSet->singleId == 0 && key->scoreSet->set != NULL) { \
+        kh_put(SIDS, key->scoreSet->set, id, &absent); \
+    } else { \
+        key->scoreSet->set = kh_init(SIDS); \
+        if (key->scoreSet->singleId) { \
+            kh_put(SIDS, key->scoreSet->set, key->scoreSet->singleId, &absent); \
+            key->scoreSet->singleId = 0; \
+        } \
+        kh_put(SIDS, key->scoreSet->set, id, &absent); \
+    } \
+    if (found == NULL) { \
+        kb_putp(type, ss, key); \
+    } \
+}
+
 
 #endif

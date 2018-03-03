@@ -4,7 +4,7 @@ process.on('unhandledRejection', (reason, p) => {
 });
 
 let config = {
-  mode: 'tcp',
+  mode: 'http',
   port: 5268
 };
 let workerFn = config.mode === 'http' ? require('./server-http') : require('./server-tcp');

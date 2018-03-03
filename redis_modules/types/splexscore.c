@@ -125,10 +125,7 @@ int SPLexScorePutValue(SPScoreCont *cont, spid_t id, const char *lexValue, doubl
     	if (strcmp(score->lex, lexValue ) != 0) {
     		search.id = score->id;
     		search.score = (SPPtrOrD_t)score->lex;
-    		oldKey = kb_getp(LEX, cont->btree, &search);
-    		if (oldKey) {
-				kb_delp(LEX, cont->btree, oldKey);
-			}
+            kb_delp(LEX, cont->btree, &search);
     		RedisModule_Free(score->lex);
     		score->lex = RedisModule_Strdup(lexValue);
 	    	score->score = val;
