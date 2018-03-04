@@ -147,33 +147,7 @@ KBTREE_INIT(GEOSET, SPScoreSetKey, SPGeoSetComp);
 
 // SPSCORE_BTREE_INIT(SCORE);
 // SPLEX_BTREE_INIT(LEX);
-#define SP_DOADD_SCORESET(type, ss, id, value) { \
-    SPScoreSetKey search = {.value = value}; \
-    SPScoreSetKey *key; \
-    SPScoreSetKey *found = kb_getp(type, ss, &search); \
-    int absent; \
-    if (found == NULL) { \
-        key = SP_CREATE_SCORE_SET_KEY(); \
-        key->value = value; \
-    } else { \
-        key = found; \
-    } \
-    if (key->scoreSet->singleId == 0 && key->scoreSet->set == NULL) { \
-        key->scoreSet->singleId = id; \
-    } else if (key->scoreSet->singleId == 0 && key->scoreSet->set != NULL) { \
-        kh_put(SIDS, key->scoreSet->set, id, &absent); \
-    } else { \
-        key->scoreSet->set = kh_init(SIDS); \
-        if (key->scoreSet->singleId) { \
-            kh_put(SIDS, key->scoreSet->set, key->scoreSet->singleId, &absent); \
-            key->scoreSet->singleId = 0; \
-        } \
-        kh_put(SIDS, key->scoreSet->set, id, &absent); \
-    } \
-    if (found == NULL) { \
-        kb_putp(type, ss, key); \
-    } \
-}
+
 
 
 #endif

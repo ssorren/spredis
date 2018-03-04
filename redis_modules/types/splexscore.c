@@ -108,7 +108,7 @@ int SPLexScorePutValue(SPScoreCont *cont, spid_t id, const char *lexValue, doubl
 	int absent;
 	int res = 1;
 
-	SPScoreKey search, *oldKey;
+	SPScoreKey search;
 	k = kh_put(LEX, cont->set, id, &absent);
     if (absent) {
     	score = RedisModule_Calloc(1, sizeof(SPScore));
