@@ -1,4 +1,6 @@
-const spredis = require('./index')({});
+const spredis = require('./index')({
+
+});
 spredis.initialize().then( () => {
 	
 	spredis.useNamespace('revsale').then(ns=> {
