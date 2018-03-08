@@ -1,9 +1,9 @@
 const spredis = require('./index')({
-
+	
 });
 spredis.initialize().then( () => {
 	
-	spredis.useNamespace('revsale').then(ns=> {
+	spredis.useNamespace('revwl').then(ns=> {
 		ns.drop().then(()=> {
 			console.log('drop complete');
 			// spredis.quit();

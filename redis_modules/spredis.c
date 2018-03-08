@@ -266,6 +266,11 @@ int SPThreadedWork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int 
     return REDISMODULE_OK;
 }
 
+
+SpredisDebug(RedisModuleCtx *ctx, const char *fmt,...) {
+    RedisModule_Log(ctx, "debug",fmt, ...);
+}
+
 int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // SPLazyPool = thpool_init(1);
 
@@ -441,6 +446,14 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         SpredisSTempUnion_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
+    if (RedisModule_CreateCommand(ctx,"spredis.documentadd",
+        SpredisDocAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx,"spredis.documentrem",
+        SpredisDocRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+    
     RedisModuleTypeMethods rm = {
         .version = REDISMODULE_TYPE_METHOD_VERSION,
         .rdb_load = SpredisTMPResRDBLoad,
@@ -540,6 +553,21 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
 
     if (SPREDISMODULE_TYPES[SPEXPRTYPE] == NULL) return REDISMODULE_ERR;
+
+
+    RedisModuleTypeMethods dtm = {
+        .version = REDISMODULE_TYPE_METHOD_VERSION,
+        .rdb_load = SpredisDocRDBLoad,
+        .rdb_save = SpredisDocRDBSave,
+        .aof_rewrite = SpredisDocRewriteFunc,
+        .free = SpredisDocFreeCallback
+    };
+
+    SPREDISMODULE_TYPES[SPDOCTYPE] = RedisModule_CreateDataType(ctx, "DoCvSZTSS",
+        SPREDISDHASH_ENCODING_VERSION, &dtm);
+
+
+    if (SPREDISMODULE_TYPES[SPDOCTYPE] == NULL) return REDISMODULE_ERR;
 
     // if (SPDBLTYPE == NULL) return REDISMODULE_ERR;
     return REDISMODULE_OK;

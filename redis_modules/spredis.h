@@ -62,7 +62,8 @@ typedef khint64_t spid_t;
 #define SPHASHTYPE 5
 #define SPGEOTYPE 6
 #define SPEXPRTYPE 7
-#define SPMAXTYPE 8
+#define SPDOCTYPE 8
+#define SPMAXTYPE 9
 
 #define SET_REDIS_KEY_VALUE_TYPE(key, type, value) RedisModule_ModuleTypeSetValue(key, SPSTRINGTYPE ,dhash);
 
@@ -80,6 +81,8 @@ int SpredisSetRedisKeyValueType(RedisModuleKey *key, int type, void *value);
 int SPDoWorkInThreadPool(void *func, void *arg);
 void SPDoWorkInParallel(void (**func)(void*), void **arg, int jobCount);
 int SPThreadedWork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int (*command)(RedisModuleCtx*, RedisModuleString**, int));
+
+SpredisDebug(const char *fmt,...);
 
 #define SP_TWORK(f,a, code) {if (SPDoWorkInThreadPool(f,a)) code}
 // void SP_TWORK(void *func, void *arg) {
@@ -113,6 +116,7 @@ int SPThreadedWork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int 
 #include "commands/sprangestore.h"
 #include "commands/spfacet.h"
 #include "types/sptempresult.h"
+#include "types/spdocument.h"
 
 
 
