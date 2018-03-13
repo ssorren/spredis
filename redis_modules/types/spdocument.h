@@ -25,6 +25,7 @@ void SPDocContainerDestroy(SPDocContainer *dc);
 
 int SpredisDocAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int SpredisDocRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+int SpredisDocGetByDocID_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 
 void SpredisDocRDBSave(RedisModuleIO *io, void *ptr);
 void SpredisDocRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value);

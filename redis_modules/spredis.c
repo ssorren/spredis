@@ -267,8 +267,11 @@ int SPThreadedWork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int 
 }
 
 
-SpredisDebug(RedisModuleCtx *ctx, const char *fmt,...) {
-    RedisModule_Log(ctx, "debug",fmt, ...);
+void SpredisDebug(RedisModuleCtx *ctx, const char *fmt,...) {
+    va_list ap;
+    va_start(ap, fmt);
+    RedisModule_Log(ctx, "debug", fmt, ap);
+    va_end(ap);   
 }
 
 int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {

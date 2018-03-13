@@ -2,6 +2,7 @@
 #define __SPREDIS_MAIN
 #include <pthread.h>
 #include <inttypes.h>
+#include <stdarg.h>
 #include "lib/thpool.h"
 #define REDISMODULE_EXPERIMENTAL_API
 #include "lib/redismodule.h"
@@ -82,7 +83,7 @@ int SPDoWorkInThreadPool(void *func, void *arg);
 void SPDoWorkInParallel(void (**func)(void*), void **arg, int jobCount);
 int SPThreadedWork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int (*command)(RedisModuleCtx*, RedisModuleString**, int));
 
-SpredisDebug(const char *fmt,...);
+void SpredisDebug(RedisModuleCtx *ctx, const char *fmt,...);
 
 #define SP_TWORK(f,a, code) {if (SPDoWorkInThreadPool(f,a)) code}
 // void SP_TWORK(void *func, void *arg) {

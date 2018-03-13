@@ -18,17 +18,13 @@ void SpredisDocRDBSave(RedisModuleIO *io, void *ptr) {
             spid_t rid = kh_value(dc->idMap, k);
             k2 = kh_get(DOC, dc->documents, rid);
             const char *doc = kh_value(dc->documents, k2);
-            
-
             RedisModule_SaveUnsigned(io, rid);
             RedisModule_SaveStringBuffer(io, strKey, strlen(strKey));
             RedisModule_SaveStringBuffer(io, doc, strlen(doc));
-
         }
     }
-
-
 }
+
 void SpredisDocRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value) {
     SPDocContainer *dc = value;
     khint_t k, k2;
@@ -115,7 +111,7 @@ int SpredisDocAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     SPDocContainer *dc;
     if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
         dc = SPDocContainerInit();
-        SpredisSetRedisKeyValueType(key,SPDOCTYPE,dhash);
+        SpredisSetRedisKeyValueType(key,SPDOCTYPE,dc);
     } else {
         dc = RedisModule_ModuleTypeGetValue(key);
     }
@@ -123,14 +119,22 @@ int SpredisDocAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     spid_t rid;
     int absent;
     k = kh_get(DOCID, dc->idMap, stringId);
+
     if (kh_exist(dc->idMap, k)) {
         rid = kh_value(dc->idMap, k);
     } else {
         rid = _SPNewRecordId(dc);
-        k = kh_put(DOCID, dc->idMap, strKey, &absent);
+        stringId = RedisModule_Strdup(stringId);
+        k = kh_put(DOCID, dc->idMap, stringId, &absent);
         kh_value(dc->idMap, k) = rid;
     }
 
+    k = kh_put(DOC, dc->documents, rid, &absent);
+    if (!absent) {
+        char *old = (char *)kh_value(dc->documents, k);
+        if (old != NULL) RedisModule_Free(old);
+    }
+    kh_value(dc->documents, k) = RedisModule_Strdup(data);
 
     RedisModule_ReplyWithArray(ctx, 2);
     RedisModule_ReplyWithLongLong(ctx, rid);
@@ -162,7 +166,68 @@ int SpredisDocRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     } else {
         dc = RedisModule_ModuleTypeGetValue(key);
     }
+    khint_t k,k2;
+    spid_t rid;
+    k = kh_get(DOCID, dc->idMap, stringId);
+    if (kh_exist(dc->idMap, k)) {
+        rid = kh_value(dc->idMap, k);
 
+        RedisModule_Free((char*)kh_key(dc->idMap, k));
+        kh_del(DOC, dc->idMap, k);
+
+        k2 = kh_get(DOC, dc->documents, rid);
+        if (kh_exist(dc->documents, k2)) {
+            char *doc = (char *)kh_value(dc->documents, k2);
+            if (doc != NULL) ReddisModule_Free(doc);
+            kh_del(DOC, dc->documents, k2);
+        }
+        
+        RedisModule_ReplyWithLongLong(ctx, 1);
+
+    } else {
+        RedisModule_ReplyWithLongLong(ctx, 0);
+    }
+
+    return REDISMODULE_OK;
+}
+
+
+int SpredisDocGetByDocID_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+    if (argc != 3) return RedisModule_WrongArity(ctx);
+    RedisModuleString *keyName = argv[1];
+    RedisModuleString *stringId = argv[2];
+    // RedisModuleString *data = argv[3];
+
+    RedisModuleKey *key = RedisModule_OpenKey(ctx, keyName, REDISMODULE_WRITE);
+    int keyType;
+    if (HASH_NOT_EMPTY_AND_WRONGTYPE(key, &keyType, SPDOCTYPE) != 0) {
+        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);   
+    }
+    
+    SPDocContainer *dc;
+    if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
+        return RedisModule_ReplyWithLongLong(ctx, 0);
+    } else {
+        dc = RedisModule_ModuleTypeGetValue(key);
+    }
+    khint_t k;
+    spid_t rid;
+    k = kh_get(DOCID, dc->idMap, stringId);
+    if (kh_exist(dc->idMap, k)) {
+        rid = kh_value(dc->idMap, k);
+        k = kh_get(DOC, dc->documents, rid);
+        
+        RedisModule_ReplyWithArray(ctx, 3);
+        RedisModule_ReplyWithLongLong(ctx, rid);
+        char ress[32];
+        sprintf(ress, "%" PRIx64, (unsigned long long)rid);
+        RedisModule_ReplyWithStringBuffer(ctx, ress, strlen(ress));
+        const char *doc = kh_value(dc->documents, k);
+        RedisModule_ReplyWithStringBuffer(ctx, doc, strlen(doc));
+    } else {
+        RedisModule_ReplyWithNull(ctx);
+    }
 
     return REDISMODULE_OK;
 }
