@@ -86,7 +86,7 @@ void SPPopulateScores(void *arg) {
     
     khint_t kk;
     int k;
-    khash_t(SCORE) *scoreMap;
+    khash_t(SORTTRACK) *scoreMap;
     size_t end = targ->end;
     uint64_t id;
 
@@ -100,7 +100,7 @@ void SPPopulateScores(void *arg) {
         while (k) {
             --k;
             scoreMap = mcd->sets[k];
-            kk = kh_get(SCORE, scoreMap, id);
+            kk = kh_get(SORTTRACK, scoreMap, id);
             (kk == kh_end(scoreMap)) ? (d->scores[k] = -HUGE_VAL) : (mcd->resolve[k](kh_val(scoreMap, kk)->score, mcd->inputs[k], &d->scores[k]));
             d->scores[k] *= mcd->orders[k];
         }
@@ -242,7 +242,7 @@ int SpredisFetchColumnsAndOrders(RedisModuleCtx *ctx, RedisModuleString **argv, 
 
         if (spType == SPZSETTYPE || spType == SPZLSETTYPE) {
             mcd->cols[i] = RedisModule_ModuleTypeGetValue(key);
-            mcd->sets[i] = mcd->cols[i]->set;
+            mcd->sets[i] = mcd->cols[i]->st;
             
             mcd->inputs[i] = NULL;
             mcd->resolve[i] = _SPResolveScore;
@@ -344,7 +344,7 @@ int SpredisExprResolve_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **ar
     SpredisProtectReadMap(exp);
     SPUnlockContext(ctx);
 
-    khash_t(SCORE) *set = exp->set;
+    khash_t(SORTTRACK) *set = exp->set;
     long long finalCount = 0;    
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     uint64_t id;
@@ -352,7 +352,7 @@ int SpredisExprResolve_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **ar
     khint_t k;
     while(start < res->size && finalCount < count) {
         id = res->data[start]->id;
-        k = kh_get(SCORE, set, id);
+        k = kh_get(SORTTRACK, set, id);
         if (k == kh_end(set)) {
             // score = -HUGE_VAL;
             RedisModule_ReplyWithNull(ctx);

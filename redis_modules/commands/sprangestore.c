@@ -305,7 +305,7 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
     }
 
     SPScoreCont *testScoreCont = RedisModule_ModuleTypeGetValue(key);
-    kbtree_t(SCORE) *testScore = testScoreCont->btree;
+    kbtree_t(SCORESET) *testScore = testScoreCont->btree;
 
     const char * gtCmp = RedisModule_StringPtrLen(argv[4], NULL);
     const char * ltCmp = RedisModule_StringPtrLen(argv[5], NULL);
@@ -320,25 +320,11 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
     double max;
     RedisModule_StringToDouble(RedisModule_CreateString(ctx, gtCmp, strlen(gtCmp)), &min);
     RedisModule_StringToDouble(RedisModule_CreateString(ctx, ltCmp, strlen(ltCmp)), &max);
-    SPScoreKey *l, *u;
-    SPScore *cand;
-    SPScoreKey t = {
-        .id = 0,
-        .score = min
+    SPScoreSetKey *l, *u, *cand;
+    SPScoreSetKey t = {
+        .value = min
     };
-    kb_intervalp(SCORE, testScore, &t, &l, &u);
-    // if (l == NULL) {
-    //     RedisModule_ReplyWithLongLong(ctx,0);
-    //     // RedisModule_CloseKey(key);
-    //     // RedisModule_CloseKey(store);
-    //     // RedisModule_CloseKey(hintKey);
-    //     SPUnlockContext(ctx);
-    //     return REDISMODULE_OK;
-    // }
-    int shouldIntersore = 0;
-    if (hint != NULL && (min == -HUGE_VAL || max == HUGE_VAL || kh_size(hint) < kb_size(testScore) / 5)) { //at some point it is not faster to intersore first
-    	shouldIntersore = 1;
-    }
+    kb_intervalp(SCORESET, testScore, &t, &l, &u);
 
     SpredisSetCont *resCont = _SpredisInitSet();
 	SpredisSetRedisKeyValueType(store, SPSETTYPE, resCont);  
@@ -346,67 +332,30 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
 
 
     khash_t(SIDS) *res = resCont->set;
-    int absent;
     int reached = 0;
-    uint32_t id;
     
     kbitr_t itr;
     SpredisProtectReadMap(testScoreCont);
     if (hintCont) SpredisProtectReadMap(hintCont);
-    if (shouldIntersore) {
-        khint_t k;
-        kh_foreach_key(hint, id, {
-            k = kh_get(SCORE, testScoreCont->set, id);
-            if (k != kh_end(testScoreCont->set)) {
-                cand = kh_value(testScoreCont->set, k);
-                if (cand && GT( cand->score, min ) && LT(cand->score, max)) {
-                    kh_put(SIDS, res, id, &absent);
-                }
-            }
-        });
-    	// int RedisModule_ZsetScore(RedisModuleKey *key, RedisModuleString *ele, double *score)
-
-
-    } else if (hint == NULL) { //more wordy, but also more efficient to do one if statement rather tht 1 per iteration
-        if (l != NULL) {
-            kb_itr_getp(SCORE, testScore, l, &itr);
-        } else {
-            kb_itr_first(SCORE, testScore, &itr);
-        }
-        for (; kb_itr_valid(&itr); kb_itr_next(SCORE, testScore, &itr)) { // move on
-            cand = (&kb_itr_key(SPScoreKey, &itr))->value;
-            if (cand) {
-                if (reached || GT(cand->score, min)) {
-                    if (LT(cand->score, max)) {
-                        reached = 1;
-                        kh_put(SIDS, res, cand->id, &absent);
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }		
-   	} else {
-   		// khint_t k;
-        if (l != NULL) {
-            kb_itr_getp(SCORE, testScore, l, &itr);
-        } else {
-            kb_itr_first(SCORE, testScore, &itr);
-        }
-        for (; kb_itr_valid(&itr); kb_itr_next(SCORE, testScore, &itr)) { // move on
-            cand = (&kb_itr_key(SPScoreKey, &itr))->value;
-            if (cand) {
-                if (reached || GT(cand->score, min)) {
-                    if (LT(cand->score, max)) {
-                        reached = 1;
-                        if (kh_contains(SIDS, hint, cand->id)) kh_put(SIDS, res, cand->id, &absent);
-                    } else {
-                        break;
-                    }
+    if (l != NULL) {
+        kb_itr_getp(SCORESET, testScore, l, &itr);
+    } else {
+        kb_itr_first(SCORESET, testScore, &itr);
+    }
+    for (; kb_itr_valid(&itr); kb_itr_next(SCORESET, testScore, &itr)) { // move on
+        cand = (&kb_itr_key(SPScoreSetKey, &itr));
+        if (cand) {
+            if (reached || GT(cand->value, min)) {
+                if (LT(cand->value, max)) {
+                    reached = 1;
+                    SPAddAllToSet(res, cand, hint);
+                    // kh_put(SIDS, res, cand->id, &absent);
+                } else {
+                    break;
                 }
             }
         }
-   	}
+    }
     SpredisUnProtectMap(testScoreCont);
     if (hintCont) SpredisUnProtectMap(hintCont);
     RedisModule_ReplyWithLongLong(ctx,kh_size(res));
@@ -513,26 +462,23 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     }
 
     SPScoreCont *testLexCont = RedisModule_ModuleTypeGetValue(key);
-    kbtree_t(LEX) *testLex = testLexCont->btree;
+    kbtree_t(LEXSET) *testLex = testLexCont->btree;
 
-    SPScoreKey *l, *u;
-    SPScore *cand;
+    SPScoreSetKey *l, *u, *cand;
     SpredisSetCont *resCont = _SpredisInitSet();
     khash_t(SIDS) *res = resCont->set;
 
 
     SpredisSetRedisKeyValueType(store, SPSETTYPE, resCont);
-    int absent;
     kbitr_t itr;
 
-    SPScoreKey t = {
-        .id = 0,
-        .score = (uint64_t)gtCmp
+    SPScoreSetKey t = {
+        .value = (uint64_t)gtCmp
     };
     SpredisProtectReadMap(testLexCont);
     if (hintCont) SpredisProtectReadMap(hintCont);
 
-    kb_intervalp(LEX, testLex, &t, &l, &u);
+    kb_intervalp(LEXSET, testLex, &t, &l, &u);
     SPUnlockContext(ctx);
 
     // if (l == NULL) {
@@ -544,58 +490,23 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     //     return REDISMODULE_OK;
     // }
 
-    int shouldIntersore = 0;
-    if (hint != NULL && ltLen < 3 && (kh_size(hint) < (kb_size(testLex) / 2))) { //at some point it is not faster to intersore first
-        shouldIntersore = 1;
-    }
-    
-    if (shouldIntersore) {
-        uint32_t id;
-        khint_t k;
-        kh_foreach_key(hint, id, {
-            k = kh_get(LEX, testLexCont->set, id);
-            if (k != kh_end(testLexCont->set)) {
-                cand = kh_value(testLexCont->set, k);
-                if (cand && cand->lex && GT(memcmp(gtCmp, cand->lex, gtLen )) && LT(memcmp(cand->lex,ltCmp , ltLen ))) {
-                    kh_put(SIDS, res, id, &absent);
-                }
-            }
-        });
+
+    int reached = 0;
+    if (l != NULL) {
+        kb_itr_getp(LEXSET, testLex, l, &itr); // get an iterator pointing to the first    
     } else {
-        int reached = 0;
-        if (l != NULL) {
-            kb_itr_getp(LEX, testLex, l, &itr); // get an iterator pointing to the first    
-        } else {
-            kb_itr_first(LEX, testLex, &itr);
-        }
-        
-        if (hint == NULL) { //wordy to do it this way bu way more efficient
-            for (; kb_itr_valid(&itr); kb_itr_next(LEX, testLex, &itr)) { // move on
-                cand = (&kb_itr_key(SPScoreKey, &itr))->value;
-                if (cand && cand->lex ) {
-                    // printf("%s,%u,, %d, %d\n", cand->lex, cand->id, memcmp(gtCmp, cand->lex, gtLen ),  memcmp(cand->lex, ltCmp, ltLen ));
-                    if (reached || GT(memcmp(gtCmp, cand->lex, gtLen ))) {
-                        if (LT(memcmp(cand->lex,ltCmp , ltLen ))) {
-                            reached = 1;
-                            kh_put(SIDS, res, cand->id, &absent);
-                        } else {
-                            break;
-                        }
-                    }
-                }
-            }
-        } else {
-            for (; kb_itr_valid(&itr); kb_itr_next(LEX, testLex, &itr)) { // move on
-                cand = (&kb_itr_key(SPScoreKey, &itr))->value;
-                if (cand && cand->lex ) {
-                    if (reached || GT(memcmp(gtCmp, cand->lex, gtLen ))) {
-                        if (LT(memcmp(cand->lex,ltCmp , ltLen ))) {
-                            reached = 1;
-                            if ( kh_contains(SIDS, hint, cand->id)) kh_put(SIDS, res, cand->id, &absent);
-                        } else {
-                            break;
-                        }
-                    }     
+        kb_itr_first(LEXSET, testLex, &itr);
+    }
+    for (; kb_itr_valid(&itr); kb_itr_next(LEXSET, testLex, &itr)) { // move on
+        cand = &kb_itr_key(SPScoreSetKey, &itr);
+        if (cand) {
+            // printf("%s,%u,, %d, %d\n", cand->lex, cand->id, memcmp(gtCmp, cand->lex, gtLen ),  memcmp(cand->lex, ltCmp, ltLen ));
+            if (reached || GT(memcmp(gtCmp, (const unsigned char *)cand->value, gtLen ))) {
+                if (LT(memcmp((const unsigned char *)cand->value,ltCmp , ltLen ))) {
+                    reached = 1;
+                    SPAddAllToSet(res, cand, hint);
+                } else {
+                    break;
                 }
             }
         }

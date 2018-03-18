@@ -26,7 +26,7 @@ void SpredisZLexSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void 
 void *SpredisZLexSetRDBLoad(RedisModuleIO *io, int encver);
 void SpredisZLexSetFreeCallback(void *value);
 int SPLexScorePutValue(SPScoreCont *cont, spid_t id, const char *lexValue, double val);
-int SPLexScoreDel(SPScoreCont *cont, spid_t id);
+int SPLexScoreDel(SPScoreCont *cont, spid_t id, const char *lexValue);
 int SpredisZLexSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int SpredisZLexSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int SpredisZLexSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);

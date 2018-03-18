@@ -5,7 +5,7 @@
 
 
 typedef struct _SpExpResolverCont {
-	khash_t(SCORE) *set;
+	khash_t(SORTTRACK) *set;
 	pthread_rwlock_t mutex;	
 	SPExpResolverType type;
 	char *keyName;

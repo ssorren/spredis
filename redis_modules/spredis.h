@@ -109,6 +109,7 @@ void SpredisWarn(RedisModuleCtx *ctx, const char *fmt,...);
 
 #include "lib/geohash.h"
 #include "types/spsharedtypes.h"
+#include "types/spscoreset.h"
 #include "types/spgeo.h"
 #include "types/spset.h"
 #include "types/spscore.h"

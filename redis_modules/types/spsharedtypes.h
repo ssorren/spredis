@@ -90,23 +90,30 @@ KHASH_DECLARE_SET(SIDS, spid_t);
 KHASH_DECLARE(SCORE, spid_t, SPScore*);
 
 
+
 // typedef struct _SPLexSetKey
 // {
 //     char *lex;
 //     spid_t singleValue;
 //     khash_t(SIDS) *set;
 // } SPLexSetKey;
-typedef struct _SPScoreSetCont {
+typedef struct _SPScoreSetMembers {
     double score;
     spid_t singleId; /* memory saver, if we come accross a lot of values where ther is only one member of the set, we'll use this single id*/
     khash_t(SIDS) *set;
-} SPScoreSetCont;
+} SPScoreSetMembers;
+
+
+KHASH_DECLARE(SORTTRACK, spid_t, SPScoreSetMembers*);
+KHASH_MAP_INIT_INT64(SORTTRACK, SPScoreSetMembers*);
 
 typedef struct _SPScoreSetKey
 {
     SPPtrOrD_t value;
-    SPScoreSetCont *scoreSet;
+    SPScoreSetMembers *scoreSet;
 } SPScoreSetKey;
+
+
 
 // typedef struct _SPGeoSetKey
 // {

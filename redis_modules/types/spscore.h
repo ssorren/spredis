@@ -10,11 +10,20 @@
 
 // int SPScoreComp(SPScore a, SPScore b);
 
-// typedef kbitr_t SPScoreIter;
+typedef kbitr_t SPScoreIter;
+// typedef struct _SPScoreCont {
+// 	khash_t(SCORE) *set;
+// 	pthread_rwlock_t mutex;
+// 	kbtree_t(SCORE) *btree;
+// } SPScoreCont;
+
+
 typedef struct _SPScoreCont {
-	khash_t(SCORE) *set;
+	// khash_t(SCORE) *set;
+	int sort;
 	pthread_rwlock_t mutex;
-	kbtree_t(SCORE) *btree;
+	kbtree_t(SCORESET) *btree;
+	khash_t(SORTTRACK) *st;
 } SPScoreCont;
 
 
@@ -26,7 +35,7 @@ void SpredisZSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *va
 void *SpredisZSetRDBLoad(RedisModuleIO *io, int encver);
 void SpredisZSetFreeCallback(void *value);
 int SPScorePutValue(SPScoreCont *cont, spid_t id, double val);
-int SPScoreDel(SPScoreCont *cont, spid_t id);
+int SPScoreDel(SPScoreCont *cont, spid_t id, double val);
 int SpredisZSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int SpredisZSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int SpredisZSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);

@@ -18,7 +18,7 @@ typedef struct _SPColFns {
 typedef struct SpredisColumnData {
     SPScoreCont **cols;
     // void **colPtrs;
-    khash_t(SCORE) **sets;
+    khash_t(SORTTRACK) **sets;
     int *orders;
     void **inputs;
     void (**resolve)(double , void *, double *);
