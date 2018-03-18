@@ -27,6 +27,7 @@ void *SpredisTMPResRDBLoad(RedisModuleIO *io, int encver);
 void SpredisTMPResFreeCallback(void *value);
 
 int SpredisTMPResGetIds_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+int SpredisTMPResGetDocs_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 
 SpredisTempResult *SpredisTempResultCreate(RedisModuleCtx *ctx, RedisModuleString *keyName, size_t size);
 
