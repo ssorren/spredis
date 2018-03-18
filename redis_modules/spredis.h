@@ -84,6 +84,8 @@ void SPDoWorkInParallel(void (**func)(void*), void **arg, int jobCount);
 int SPThreadedWork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int (*command)(RedisModuleCtx*, RedisModuleString**, int));
 
 void SpredisDebug(RedisModuleCtx *ctx, const char *fmt,...);
+void SpredisLog(RedisModuleCtx *ctx, const char *fmt,...);
+void SpredisWarn(RedisModuleCtx *ctx, const char *fmt,...);
 
 #define SP_TWORK(f,a, code) {if (SPDoWorkInThreadPool(f,a)) code}
 // void SP_TWORK(void *func, void *arg) {

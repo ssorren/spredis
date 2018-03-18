@@ -108,7 +108,8 @@ void *SpredisHashRDBLoad(RedisModuleIO *io, int encver) {
     		if (cont->valueType == SPHashStringType) {
     			RedisModuleString *s = RedisModule_LoadString(io);
 				val = (SPPtrOrD_t)RedisModule_Strdup( RedisModule_StringPtrLen(s, NULL));
-				RedisModule_Free(s);
+                RedisModule_FreeString(RedisModule_GetContextFromIO(io),s);
+				// RedisModule_Free(s);
 			} else {
 				val = (SPPtrOrD_t)RedisModule_LoadDouble(io);
 			}

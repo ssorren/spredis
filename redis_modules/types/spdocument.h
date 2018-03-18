@@ -27,10 +27,15 @@ int SpredisDocAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
 int SpredisDocRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int SpredisDocGetByDocID_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 
+int SpredisInitDocumentCommands(RedisModuleCtx *ctx);
+
+
 void SpredisDocRDBSave(RedisModuleIO *io, void *ptr);
 void SpredisDocRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value);
 void *SpredisDocRDBLoad(RedisModuleIO *io, int encver);
 void SpredisDocFreeCallback(void *value);
+
+
 
 #endif
 

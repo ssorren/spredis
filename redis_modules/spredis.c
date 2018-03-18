@@ -274,6 +274,20 @@ void SpredisDebug(RedisModuleCtx *ctx, const char *fmt,...) {
     va_end(ap);   
 }
 
+void SpredisLog(RedisModuleCtx *ctx, const char *fmt,...) {
+    va_list ap;
+    va_start(ap, fmt);
+    RedisModule_Log(ctx, "notice", fmt, ap);
+    va_end(ap);   
+}
+
+void SpredisWarn(RedisModuleCtx *ctx, const char *fmt,...) {
+    va_list ap;
+    va_start(ap, fmt);
+    RedisModule_Log(ctx, "warning", fmt, ap);
+    va_end(ap);   
+}
+
 int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // SPLazyPool = thpool_init(1);
 
@@ -289,12 +303,14 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     SP_GENERIC_WORKER_POOL = thpool_init(SP_GEN_TPOOL_SIZE);
     SP_PQ_POOL = sp_pq_init(SP_PQ_POOL_SIZE, SP_PQ_TCOUNT_SIZE);
 
-    printf("SPREDIS_MEMORIES initialized (bleep bleep, blorp blorp, pew pew)\n");
+    SpredisLog(ctx, "SPREDIS_MEMORIES initialized (bleep bleep, blorp blorp, pew pew)\n");
     
-    for (int j = 0; j < argc; j++) {
-        const char *s = RedisModule_StringPtrLen(argv[j],NULL);
-        printf("Module loaded with ARGV[%d] = %s\n", j, s);
-    }
+    // for (int j = 0; j < argc; j++) {
+    //     const char *s = RedisModule_StringPtrLen(argv[j],NULL);
+    //     SpredisLog(ctx, "Module loaded with ARGV[%d] = %s\n", j, s);
+    // }
+
+    if (SpredisInitDocumentCommands(ctx) != REDISMODULE_OK) return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx,"spredis.exprtest",
         SpredisEXPR_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)

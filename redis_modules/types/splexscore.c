@@ -82,7 +82,9 @@ void *SpredisZLexSetRDBLoad(RedisModuleIO *io, int encver) {
         double score = RedisModule_LoadDouble(io);
         RedisModuleString *lex = RedisModule_LoadString(io);
         SPLexScorePutValue(dhash, id, RedisModule_StringPtrLen(lex, NULL), score);
-        RedisModule_Free(lex);
+        RedisModule_FreeString(RedisModule_GetContextFromIO(io),lex);
+        // RedisModule_FreeString(lex);
+
     }
     return dhash;
 }
