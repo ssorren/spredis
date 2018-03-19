@@ -39,36 +39,18 @@ void SPScoreContDestroy(SPScoreCont *cont) {
 
 
 void SpredisZSetRDBSave(RedisModuleIO *io, void *ptr) {
-    SPScoreCont *dhash = ptr;
-    // kbtree_t(SCORE)* tree = dhash->btree;
-    // kbtree_t(SCORE)* tree = cont->btree;
-    // RedisModule_SaveUnsigned(io, kh_size(dhash->set));
-    // // spid_t id;
-    // SPScore *s;
-    // kh_foreach_value(dhash->set, s, {
-    // 	RedisModule_SaveUnsigned(io, s->id);
-    //     RedisModule_SaveDouble(io, s->score);
-    // });
+    SPScoreCont *cont = ptr;
+    SpredisProtectReadMap(cont);
+    SPWriteScoreSetToRDB(io, cont->btree);
+    SpredisUnProtectMap(cont);
 }
 
 
 void SpredisZSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value) {
-	SPScoreCont *dhash = value;
-    // SPScore *s;
-    // kh_foreach_value(dhash->set, s, {
-    // 	char ress[32];
-    //     sprintf(ress, "%" PRIx64, (unsigned long long)s->id);
-    //     char score[50];
-    //     sprintf(score, "%1.17g" ,s->score);
-    //     RedisModule_EmitAOF(aof,"spredis.zadd","sclc", key, ress, score);
-    // });
-
-    // kh_foreach_key(dhash->set, id, {
-    // 	char ress[32];
-    //     sprintf(ress, "%" PRIx32, id);
-    //     // RedisModule_CreateStringPrintf(ctx, "%" PRIx32, id);
-    // 	RedisModule_EmitAOF(aof,"spredis.sadd","sc", key, ress);
-    // });
+	SPScoreCont *cont = value;
+    // SpredisProtectReadMap(cont);
+    // SPWriteScoreSetToRDB(io, cont->btree);
+    // SpredisUnProtectMap(cont);
 }
 
 
@@ -80,19 +62,13 @@ void *SpredisZSetRDBLoad(RedisModuleIO *io, int encver) {
         return NULL;
     }
     
-    SPScoreCont *dhash = SPScoreContInit();
-    // spid_t valueCount = RedisModule_LoadUnsigned(io);
-    // for (spid_t i = 0; i < valueCount; ++i)
-    // {
-    //     spid_t id = RedisModule_LoadUnsigned(io);
-    //     double score = RedisModule_LoadDouble(io);
-    //     SPScorePutValue(dhash, id, score);
-    // }
-    // kbtree_t(SCORE)* tree = dhash->btree;
-    // printf("Loaded zset, count =%u, %d\n", kh_size(dhash->set), (tree == 0));
-    // printf("Loaded tree, count =%u", tree->n_keys);
-    return dhash;
+    SPScoreCont *cont = SPScoreContInit();
+    SpredisProtectWriteMap(cont);
+    SPReadScoreSetFromRDB(io, cont->btree, NULL);
+    SpredisUnProtectMap(cont);
+    return cont;
 }
+
 
 void SpredisZSetFreeCallback(void *value) {
     if (value == NULL) return;
@@ -108,53 +84,16 @@ int SPScorePutValue(SPScoreCont *cont, spid_t id, double val) {
 	SpredisProtectWriteMap(cont);
 
     SPAddScoreToSet(cont->btree, NULL, id, (SPPtrOrD_t)val);
-	// SPScore *score;
-	// kbtree_t(SCORE) *tree = cont->btree;;
-	// khint_t k;
-	// int absent;
-	int res = 1;
-	// k = kh_put(SCORE, cont->set, id, &absent);
-
- //    if (absent) {
- //    	score = RedisModule_Calloc(1, sizeof(SPScore));
-	// 	score->id = id;
-	// 	score->score = val;
- //        kh_put_value(cont->set, k, score);
- //        SPScoreKey key = {.id=score->id, .score=(uint64_t)score->score, .value = score};
- //        kb_putp(SCORE, tree, &key);
- //    } else {
- //    	score = kh_value(cont->set, k);
- //    	if (kh_value(cont->set, k)->score != val) {
- //    		SPScoreKey search = {.id=score->id, .score=(uint64_t)score->score};
- //    		kb_delp(SCORE, tree, &search);
-	//     	kh_value(cont->set, k)->score = val;
-	//     	SPScoreKey key = {.id=score->id, .score=(uint64_t)score->score, .value = score};
-	//     	kb_putp(SCORE, tree, &key);	
- //    	} else {
- //    		res = 0;
- //    	}
- //    }
     SpredisUnProtectMap(cont);
-	return res;
+	return 1;
 }
 
 int SPScoreDel(SPScoreCont *cont, spid_t id, double val) {
 	SpredisProtectWriteMap(cont);
     SPRemScoreFromSet(cont->btree, NULL, id, (SPPtrOrD_t)val);
-	// SPScore *score;
-	// kbtree_t(SCORE)* tree = cont->btree;;
-	// khint_t k;
-	int res = 0;
-	// k = kh_get(SCORE, cont->set, id);
-	// if (k != kh_end(cont->set)) {
-	// 	score = kh_value(cont->set, k);
-	// 	SPScoreKey search = {.id=score->id, .score=(uint64_t)score->score};
-	// 	kb_delp(SCORE, tree, &search);
-	// 	kh_del_key_value(SCORE, cont->set, k, score, 1)
-	// 	res = 1;
-	// }
-	SpredisUnProtectMap(cont);
-	return res;
+	
+    SpredisUnProtectMap(cont);
+	return 1;
 }
 
 
@@ -215,7 +154,7 @@ int SpredisZSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
     if (argc != 3) return RedisModule_WrongArity(ctx);
     RedisModuleKey *key = RedisModule_OpenKey(ctx,argv[1],
             REDISMODULE_READ);
-    int keyType;
+    // int keyType;
 
  //    if (HASH_NOT_EMPTY_AND_WRONGTYPE(key, &keyType, SPZSETTYPE) != 0) {
  //        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);   

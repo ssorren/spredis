@@ -20,7 +20,7 @@ typedef struct {
     RedisModuleBlockedClient *bc;
     uint64_t reply;
     double slat, slon, radius;
-    SPGeoScoreCont *geoCont;
+    SPScoreCont *geoCont;
     SpredisSetCont *hintCont;
     SpredisSetCont *resCont;
 } SPStoreRadiusTarg;
@@ -52,6 +52,7 @@ void SPFreeSPStoreRadiusTarg(void *arg) {
     RedisModule_Free(arg);
 }
 
+
 void SpredisStoreRangeByRadius_Thread(SPStoreRadiusTarg *targ) {
     // SPStoreRadiusTarg *targ = arg;
     SpredisProtectReadMap(targ->geoCont);
@@ -61,7 +62,7 @@ void SpredisStoreRangeByRadius_Thread(SPStoreRadiusTarg *targ) {
     double slat = targ->slat;
     double slon = targ->slon;
     double radius = targ->radius;
-    SPGeoScoreCont *geoCont = targ->geoCont;
+    SPScoreCont *geoCont = targ->geoCont;
     SpredisSetCont *resCont = targ->resCont;
     khash_t(SIDS) *hint = NULL;
     SpredisSetCont *hintCont = targ->hintCont;
@@ -72,67 +73,43 @@ void SpredisStoreRangeByRadius_Thread(SPStoreRadiusTarg *targ) {
     SPGeoSearchAreas areas;
     uint64_t start, stop;// = SPGeoHashEncodeForRadius(slat, slon, radius, &ghash);
     SPGetSearchAreas(slat, slon, radius, &areas, &bounds);
-    kbtree_t(GEO) *geoTree = geoCont->btree;
-    khash_t(SCORE) *geoSet = geoCont->set;
-    SPScoreKey *l, *u, *use, *candKey;
-    SPScore *cand;
+    kbtree_t(GEOSET) *geoTree = geoCont->btree;
+    SPScoreSetKey *l, *u, *use, *candKey;
     
     khash_t(SIDS) *res = resCont->set;
     
-    int absent;
     kbitr_t itr;
 
-    int shouldIntersore = 0;
-    if (hint != NULL && (kh_size(hint) < (kb_size(geoTree) / 2))) { //at some point it is not faster to intersore first
-        shouldIntersore = 1;
-    }
-
-    if (shouldIntersore) {
-        uint32_t id;
-        khint_t k;
-        kh_foreach_key(hint, id, {
-            k = kh_get(SCORE, geoSet, id);
-            if (k != kh_end(geoSet)) {
-                cand = kh_value(geoSet, k);
-                if (cand && cand->score) {
-                    SPGeoHashDecode(cand->score, &lat, &lon);
+    for (int i = 0; i < 9; ++i)
+    {
+        /* code */
+        area = areas.area[i];
+        if (!area.hash.bits) continue;
+        start = area.hash.bits << (62 - (area.hash.step * 2));
+        stop = ++area.hash.bits << (62 - (area.hash.step * 2));
+        SPScoreSetKey t = {
+            .value = start
+        };
+        // afound = 0;
+        kb_intervalp(GEOSET, geoTree, &t, &l, &u);
+        use = u == NULL ? l : u;
+        kb_itr_getp(GEOSET, geoTree, use, &itr);
+        for (; kb_itr_valid(&itr); kb_itr_next(GEOSET, geoTree, &itr)) { // move on
+            candKey = (&kb_itr_key(SPScoreSetKey, &itr));
+            if (candKey) {
+                if (candKey->value >= start) {
+                    if (candKey->value >= stop) break;
+                    SPGeoHashDecode(candKey->value, &lat, &lon);
                     if (SP_INBOUNDS(lat, lon, bounds) && SPGetDist(slat, slon, lat, lon) <= radius) {
-                        kh_put(SIDS, res, id, &absent);
-                    }
-                }
-            }
-        });
-    } else {
-        for (int i = 0; i < 9; ++i)
-        {
-            /* code */
-            area = areas.area[i];
-            if (!area.hash.bits) continue;
-            start = area.hash.bits << (62 - (area.hash.step * 2));
-            stop = ++area.hash.bits << (62 - (area.hash.step * 2));
-            SPScoreKey t = {
-                .id = 0,
-                .score = start
-            };
-            // afound = 0;
-            kb_intervalp(SCORE, geoTree, &t, &l, &u);
-            use = u == NULL ? l : u;
-            kb_itr_getp(GEO, geoTree, use, &itr);
-            for (; kb_itr_valid(&itr); kb_itr_next(SCORE, geoTree, &itr)) { // move on
-                candKey = (&kb_itr_key(SPScoreKey, &itr));
-                if (candKey) {
-                    if (candKey->score >= start) {
-                        if (candKey->score >= stop) break;
-                        SPGeoHashDecode(candKey->score, &lat, &lon);
-                        if (SP_INBOUNDS(lat, lon, bounds) && SPGetDist(slat, slon, lat, lon) <= radius
-                                && (hint == NULL || kh_contains(SIDS, hint, candKey->id)) ) {
-                            kh_put(SIDS, res, candKey->id, &absent);
-                        }
+
+                        SPAddAllToSet(res, candKey, hint);
+                        // kh_put(SIDS, res, candKey->id, &absent);
                     }
                 }
             }
         }
     }
+    
     // RedisModule_ZsetRangeStop(key);
     targ->reply = kh_size(res);
     SpredisUnProtectMap(geoCont);
@@ -169,7 +146,7 @@ int SpredisStoreRangeByRadius_RedisCommand(RedisModuleCtx *ctx, RedisModuleStrin
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
     }
 
-    SPGeoScoreCont *geoCont = RedisModule_ModuleTypeGetValue(key);
+    SPScoreCont *geoCont = RedisModule_ModuleTypeGetValue(key);
 
     double slat, slon, radius;
     int pres;

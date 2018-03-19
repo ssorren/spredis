@@ -45,19 +45,10 @@ void SPLexScoreContDestroy(SPScoreCont *cont) {
 
 
 void SpredisZLexSetRDBSave(RedisModuleIO *io, void *ptr) {
-    SPScoreCont *dhash = ptr;
-    // SpredisProtectReadMap(dhash);
-    // RedisModule_SaveUnsigned(io, kh_size(dhash->set));
-    // SPScore *s = NULL;
-
-    // kh_foreach_value(dhash->set, s, {
-
-    // 	RedisModule_SaveUnsigned(io, s->id);
-    //     RedisModule_SaveDouble(io, s->score);
-    // 	RedisModule_SaveStringBuffer(io, s->lex, strlen(s->lex));
-        
-    // });
-    // SpredisUnProtectMap(dhash);
+    SPScoreCont *cont = ptr;
+    SpredisProtectReadMap(cont);
+    SPWriteLexSetToRDB(io, cont->btree);
+    SpredisUnProtectMap(cont);
 }
 
 
@@ -74,7 +65,6 @@ void SpredisZLexSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void 
 }
 
 
-
 void *SpredisZLexSetRDBLoad(RedisModuleIO *io, int encver) {
     if (encver != SPREDISDHASH_ENCODING_VERSION) {
         /* We should actually log an error here, or try to implement
@@ -82,19 +72,11 @@ void *SpredisZLexSetRDBLoad(RedisModuleIO *io, int encver) {
         return NULL;
     }
     
-    SPScoreCont *dhash = SPLexScoreContInit();
-    // spid_t valueCount = RedisModule_LoadUnsigned(io);
-    // for (spid_t i = 0; i < valueCount; ++i)
-    // {
-    //     spid_t id = RedisModule_LoadUnsigned(io);
-    //     double score = RedisModule_LoadDouble(io);
-    //     RedisModuleString *lex = RedisModule_LoadString(io);
-    //     SPLexScorePutValue(dhash, id, RedisModule_StringPtrLen(lex, NULL), score);
-    //     RedisModule_FreeString(RedisModule_GetContextFromIO(io),lex);
-    //     // RedisModule_FreeString(lex);
-
-    // }
-    return dhash;
+    SPScoreCont *cont = SPLexScoreContInit();
+    SpredisProtectWriteMap(cont);
+    SPReadLexSetFromRDB(io, cont->btree, NULL);
+    SpredisUnProtectMap(cont);
+    return cont;
 }
 
 void SpredisZLexSetFreeCallback(void *value) {

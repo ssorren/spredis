@@ -2,6 +2,7 @@
 #define __SPREDIS_GEO
 
 #include "../spredis.h"
+#include "./spscore.h"
 #include <pthread.h>
 
 
@@ -19,14 +20,14 @@ typedef struct _SPGeoSearchAreas {
 
 // int SPLexScoreComp(SPScoreKey a, SPScoreKey b);
 
-SPGeoScoreCont *SPGeoScoreContInit();
+SPScoreCont *SPGeoScoreContInit();
 void SPGeoScoreContDestroy(void *cont);
 void SpredisZGeoSetRDBSave(RedisModuleIO *io, void *ptr);
 void SpredisZGeoSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value);
 void *SpredisZGeoSetRDBLoad(RedisModuleIO *io, int encver);
 void SpredisZGeoSetFreeCallback(void *value);
-int SPGeoScorePutValue(SPGeoScoreCont *cont, spid_t id, uint16_t pos, double lat, double lon);
-int SPGeoScoreDel(SPGeoScoreCont *cont, spid_t id);
+int SPGeoScorePutValue(SPScoreCont *cont, spid_t id, uint16_t pos, double lat, double lon);
+int SPGeoScoreDel(SPScoreCont *cont, spid_t id, double lat, double lon);
 int SpredisZGeoSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int SpredisZGeoSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int SpredisZGeoSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);

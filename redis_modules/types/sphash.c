@@ -140,7 +140,6 @@ void SpredisHashDestroy(void *value) {
     SpredisUnProtectMap(cont);
     pthread_rwlock_destroy(&cont->mutex);
     RedisModule_Free(cont);
-
 }
 
 

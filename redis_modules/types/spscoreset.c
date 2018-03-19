@@ -1,16 +1,15 @@
 #include "./spscoreset.h"
 
-static inline SPScoreSetKey * SP_CREATE_SCORESET_KEY() {
-	SPScoreSetKey *key = RedisModule_Calloc(1, sizeof(SPScoreSetKey));
-	key->scoreSet = RedisModule_Calloc(1, sizeof(SPScoreSetMembers));
-	// key->scoreSet->set = kh_init(SIDS);
-    key->scoreSet->set = NULL;
-	return key;
-}
+// static inline SPScoreSetKey * SP_CREATE_SCORESET_KEY() {
+// 	SPScoreSetKey *key = RedisModule_Calloc(1, sizeof(SPScoreSetKey));
+// 	key->members = RedisModule_Calloc(1, sizeof(SPScoreSetMembers));
+// 	// key->members->set = kh_init(SIDS);
+//     key->members->set = NULL;
+// 	return key;
+// }
 
 #define  SP_FREE_SCORESET_KEY(key)  \
-    if ((key)->scoreSet->set) kh_destroy(SIDS, (key)->scoreSet->set); \
-    RedisModule_Free( (key) )
+    if ((key)->members->set) kh_destroy(SIDS, (key)->members->set);
 
 #define SP_FREE_LEXSET_KEY(key)  \
     if (key->value) RedisModule_Free((char *)key->value); \
@@ -23,27 +22,29 @@ static inline SPScoreSetKey * SP_CREATE_SCORESET_KEY() {
 #define SP_DOADD_SCORESET_AUX(type, ss, st, id, value, dup) { \
     SPScoreSetKey ___search = {.value = (SPPtrOrD_t)(value)}; \
     SPScoreSetKey *___key = kb_getp(type, ss, &___search); \
+    SPScoreSetKey __create; \
     int absent; \
     if (___key == NULL) { \
-        ___key = SP_CREATE_SCORESET_KEY(); \
        	if (dup) { \
-        	___key->value = (SPPtrOrD_t)RedisModule_Strdup((char *)(value)); \
-            ___key->scoreSet->score = 0; /* score will be added later on apply sort */ \
+            const char *__lexVal = RedisModule_Strdup((char *)(value)); \
+            __create.value = (SPPtrOrD_t)__lexVal; \
+            __create.members = RedisModule_Calloc(1, sizeof(SPScoreSetMembers)); \
+            __create.members->set = kh_init(SIDS); \
+            ___key = &__create; \
+            ___key->members->score = 0; /* score will be added later on apply sort */ \
 	    } else { \
-	    	___key->value = (value); \
-            ___key->scoreSet->score = (value); \
+            __create.value = (value); \
+            __create.members = RedisModule_Calloc(1, sizeof(SPScoreSetMembers)); \
+            __create.members->set = kh_init(SIDS); \
+            ___key = &__create; \
+            ___key->members->score = (value); \
 	    } \
         kb_putp(type, ss, ___key); \
     } \
-    if (___key->scoreSet->singleId && ___key->scoreSet->singleId != (id)) { \
-        if (___key->scoreSet->set == NULL) ___key->scoreSet->set = kh_init(SIDS);\
-	    kh_put(SIDS, ___key->scoreSet->set, (id), &absent); \
-	} else { \
-		___key->scoreSet->singleId = (id); \
-	} \
+    kh_put(SIDS, ___key->members->set, (id), &absent); \
     if (st != NULL) { \
         khint_t ___k = kh_put(SORTTRACK, (st), (id), &absent);\
-        kh_value((st), ___k) = ___key->scoreSet; \
+        kh_value((st), ___k) = ___key->members; \
     } \
 }
 
@@ -51,21 +52,44 @@ static inline SPScoreSetKey * SP_CREATE_SCORESET_KEY() {
 #define SP_DOADD_SCORESET(type, ss, st, id, value) SP_DOADD_SCORESET_AUX(type, ss, st, id, value, 0)
 #define SP_DOADD_LEXSET(type, ss, st, id, value) SP_DOADD_SCORESET_AUX(type, ss, st, id, value, 1)
 
+#define SP_DEL_SCORESET_KEY(key, search) \
+        SPScoreSetMembers *___mems = (key)->members; \
+        kb_delp(SCORESET, ss, (search)); \
+        if (___mems) { \
+            kh_destroy(SIDS, ___mems->set); \
+            RedisModule_Free(___mems); \
+        }
+
+#define SP_DEL_LEXSET_KEY(key, search) \
+        void *___ptr = (void *)(key)->value; \
+        SPScoreSetMembers *___mems = ___key->members; \
+        kb_delp(LEXSET, ss, (search)); \
+        if (___ptr) RedisModule_Free(___ptr); \
+        if (___mems) { \
+            kh_destroy(SIDS, ___mems->set); \
+            RedisModule_Free(___mems); \
+        }
+
+
+#define SP_DEL_GEOSET_KEY(key, search) \
+        SPScoreSetMembers *___mems = (key)->members; \
+        kb_delp(GEOSET, ss, (search)); \
+        if (___mems) { \
+            if (___mems->set) kh_destroy(SIDS, ___mems->set); \
+            RedisModule_Free(___mems); \
+        }
+
 #define SP_DOREM_SCORESET(type, ss, st, id, value) { \
     SPScoreSetKey ___search = {.value = (SPPtrOrD_t)(value)}; \
     SPScoreSetKey *___key = kb_getp(type, ss, &___search); \
     if (___key != NULL) { \
-    	if (___key->scoreSet->singleId == (id)) ___key->scoreSet->singleId = 0; \
-        if (___key->scoreSet->set != NULL) { \
-        	khint_t ___k = kh_get(SIDS, ___key->scoreSet->set , (id)); \
-        	if (___k != kh_end(___key->scoreSet->set)) { \
-    	        kh_del(SIDS, ___key->scoreSet->set, ___k);    \
-            } \
+    	/*if (___key->members->singleId == (id)) ___key->members->singleId = 0;*/ \
+    	khint_t ___k = kh_get(SIDS, ___key->members->set , (id)); \
+    	if (___k != kh_end(___key->members->set)) { \
+	        kh_del(SIDS, ___key->members->set, ___k);    \
         } \
-        if ((___key->scoreSet->set == NULL || kh_size(___key->scoreSet->set) == 0) && ___key->scoreSet->singleId == 0) { \
-            /*printf("deleting: %s\n", (char *)(___key->value));*/  \
-            kb_delp(type, ss, ___key); \
-            SP_FREE_##type##_KEY(___key); \
+        if (kh_size(___key->members->set) == 0 /*&& ___key->members->singleId == 0*/) { \
+            SP_DEL_##type##_KEY(___key, &___search); \
         }\
     } \
 }
@@ -73,13 +97,19 @@ static inline SPScoreSetKey * SP_CREATE_SCORESET_KEY() {
 void _SPAddAllToSetWithHint(khash_t(SIDS) *set, SPScoreSetKey *key, khash_t(SIDS) *hint) {
     spid_t id;
     int absent;
-    khash_t(SIDS) *res = key->scoreSet->set;
-    if (key->scoreSet->singleId) kh_put(SIDS, (set), (key)->scoreSet->singleId, &absent);
-    if (res != NULL) {
-        kh_foreach_key(res,id, {
-            if (kh_contains(SIDS, hint, id)) kh_put(SIDS, set, id, &absent);
-        });    
+    // if (key->members->singleId && kh_contains(SIDS, hint, key->members->singleId))
+    //     kh_put(SIDS, (set), (key)->members->singleId, &absent);
+    khash_t(SIDS) *smaller, *larger;
+    if (kh_size(hint) < kh_size(key->members->set)) {
+        smaller = hint;
+        larger = key->members->set;
+    } else {
+        smaller = key->members->set;
+        larger = hint;
     }
+    kh_foreach_key(smaller,id, {
+        if (kh_contains(SIDS, larger, id)) kh_put(SIDS, set, id, &absent);
+    });    
 }
 
 void SPAddAllToSet(khash_t(SIDS) *set, SPScoreSetKey *key, khash_t(SIDS) *hint) {
@@ -89,13 +119,9 @@ void SPAddAllToSet(khash_t(SIDS) *set, SPScoreSetKey *key, khash_t(SIDS) *hint) 
     }
 	spid_t id;
 	int absent;
-	khash_t(SIDS) *res = key->scoreSet->set;
-	if (key->scoreSet->singleId) kh_put(SIDS, (set), (key)->scoreSet->singleId, &absent);
-    if (res != NULL) {
-        kh_foreach_key(res,id, {
-            kh_put(SIDS, set, id, &absent);
-        });    
-    }
+    kh_foreach_key(key->members->set,id, {
+        kh_put(SIDS, set, id, &absent);
+    });    
 }
 
 void SPAddScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value)
@@ -154,9 +180,102 @@ void SPDestroyLexScoreSet(kbtree_t(SCORESET) *ss)
     kb_destroy(SCORESET, ss);
 }
 
+
+
 void SPDestroyGeoScoreSet(kbtree_t(SCORESET) *ss)
 {
     SPDestroyScoreSet(ss);
 }
+
+
+
+void SPWriteScoreSetToRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss) {
+    RedisModule_SaveUnsigned(io, kb_size(ss));
+    kbitr_t itr;
+    SPScoreSetKey *p;
+    kb_itr_first(SCORESET, ss, &itr); // get an iterator pointing to the first
+    for (; kb_itr_valid(&itr); kb_itr_next(SCORESET, ss, &itr)) { // move on
+        p = &kb_itr_key(SPScoreSetKey, &itr);
+        RedisModule_SaveDouble(io, (double)p->value);
+        size_t count = 0;
+        // if (p->members->singleId) count++;
+        if (p->members->set) count += kh_size(p->members->set);
+        RedisModule_SaveUnsigned(io, count);
+        // if (p->members->singleId) RedisModule_SaveUnsigned(io, p->members->singleId);
+        if (p->members->set) {
+            spid_t id;
+            kh_foreach_key(p->members->set, id, {
+                RedisModule_SaveUnsigned(io, id);
+            }); 
+        }
+    }
+}
+
+void SPWriteLexSetToRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss) {
+    RedisModule_SaveUnsigned(io, kb_size(ss));
+    kbitr_t itr;
+    SPScoreSetKey *p;
+    kb_itr_first(LEXSET, ss, &itr); // get an iterator pointing to the first
+    for (; kb_itr_valid(&itr); kb_itr_next(LEXSET, ss, &itr)) { // move on
+        p = &kb_itr_key(SPScoreSetKey, &itr);
+        const char *key = (char *)p->value;
+        RedisModule_SaveStringBuffer(io, key, strlen(key));
+        size_t count = 0;
+        // if (p->members->singleId) count++;
+        if (p->members->set) count += kh_size(p->members->set);
+        RedisModule_SaveUnsigned(io, count);
+        // if (p->members->singleId) RedisModule_SaveUnsigned(io, p->members->singleId);
+        if (p->members->set) {
+            spid_t id;
+            kh_foreach_key(p->members->set, id, {
+                RedisModule_SaveUnsigned(io, id);
+            }); 
+        }
+    }
+}
+
+void SPWriteGeoSetToRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss) {
+    SPWriteScoreSetToRDB(io, ss);
+}
+
+
+void SPReadScoreSetFromRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st) {
+    size_t count = RedisModule_LoadUnsigned(io);
+    for (size_t i = 0; i < count; ++i)
+    {
+        SPPtrOrD_t key = (SPPtrOrD_t)RedisModule_LoadDouble(io);
+        size_t keyCount = RedisModule_LoadUnsigned(io);
+        for (size_t k = 0; k < keyCount; ++k)
+        {
+            spid_t id = RedisModule_LoadUnsigned(io);
+            SPAddScoreToSet(ss, st, id, key);
+        }
+    }
+}
+
+void SPReadLexSetFromRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st) {
+    size_t count = RedisModule_LoadUnsigned(io);
+    for (size_t i = 0; i < count; ++i)
+    {
+        RedisModuleString *s = RedisModule_LoadString(io);
+        SPPtrOrD_t key = (SPPtrOrD_t)RedisModule_StringPtrLen(s, NULL);
+        size_t keyCount = RedisModule_LoadUnsigned(io);
+        for (size_t k = 0; k < keyCount; ++k)
+        {
+            spid_t id = RedisModule_LoadUnsigned(io);
+            SPAddLexScoreToSet(ss, st, id, key);
+        }
+        RedisModule_FreeString(RedisModule_GetContextFromIO(io),s);
+    }
+}
+
+void SPReadGeoSetFromRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st) {
+    SPReadScoreSetFromRDB(io, ss, st);
+}
+
+
+
+
+
 
 
