@@ -1,4 +1,5 @@
 #include "../spredis.h"
+#include <float.h>
 
 #define SP_INBOUNDS(lat, lon, bounds)  (lon >= bounds.longitude.min && lon <= bounds.longitude.max && lat >= bounds.latitude.min && lat <= bounds.latitude.max)
 
@@ -301,7 +302,12 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
     SPScoreSetKey t = {
         .value = min
     };
-    kb_intervalp(SCORESET, testScore, &t, &l, &u);
+    if (min > DBL_MIN) {
+        kb_intervalp(SCORESET, testScore, &t, &l, &u);    
+    } else {
+        l = NULL;
+    }
+    
 
     SpredisSetCont *resCont = _SpredisInitSet();
 	SpredisSetRedisKeyValueType(store, SPSETTYPE, resCont);  
@@ -319,14 +325,16 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
     } else {
         kb_itr_first(SCORESET, testScore, &itr);
     }
+    // printf("Searching, min=%f max=%f,\n", min, max);
+
     for (; kb_itr_valid(&itr); kb_itr_next(SCORESET, testScore, &itr)) { // move on
+
         cand = (&kb_itr_key(SPScoreSetKey, &itr));
         if (cand) {
             if (reached || GT(cand->value, min)) {
                 if (LT(cand->value, max)) {
                     reached = 1;
                     SPAddAllToSet(res, cand, hint);
-                    // kh_put(SIDS, res, cand->id, &absent);
                 } else {
                     break;
                 }

@@ -109,7 +109,6 @@ void *SpredisHashRDBLoad(RedisModuleIO *io, int encver) {
     			RedisModuleString *s = RedisModule_LoadString(io);
 				val = (SPPtrOrD_t)RedisModule_Strdup( RedisModule_StringPtrLen(s, NULL));
                 RedisModule_FreeString(RedisModule_GetContextFromIO(io),s);
-				// RedisModule_Free(s);
 			} else {
 				val = (SPPtrOrD_t)RedisModule_LoadDouble(io);
 			}

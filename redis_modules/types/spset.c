@@ -10,20 +10,32 @@ typedef struct {
 
 void * _SpredisInitSet() {
 
-    SpredisSetCont *cont = RedisModule_Alloc(sizeof(SpredisSetCont));
+    SpredisSetCont *cont = RedisModule_Calloc(1, sizeof(SpredisSetCont));
     pthread_rwlock_init ( &(cont->mutex),NULL );
     // pthread_rwlock_init ( &(cont->bigLock),NULL );
+    cont->linkedSet = 0;
     cont->set = kh_init(SIDS);
+    return cont;
+}
+
+void * _SpredisInitWithLinkedSet(khash_t(SIDS) *s, pthread_rwlock_t mutex) {
+
+    SpredisSetCont *cont = RedisModule_Calloc(1, sizeof(SpredisSetCont));
+    cont->mutex = mutex;
+    cont->linkedSet = 1;
+    cont->set = s;
     return cont;
 }
 
 
 void _SpredisDestroySet(void *value) {
     SpredisSetCont *dhash = value;
-    SpredisProtectWriteMap(dhash);
-    if (dhash->set != NULL) kh_destroy(SIDS, dhash->set);
-    SpredisUnProtectMap(dhash);
-    pthread_rwlock_destroy(&dhash->mutex);
+    if (!dhash->linkedSet) {
+        SpredisProtectWriteMap(dhash);
+        if (dhash->set != NULL) kh_destroy(SIDS, dhash->set);
+        SpredisUnProtectMap(dhash);
+        pthread_rwlock_destroy(&dhash->mutex);    
+    }
     // pthread_rwlock_destroy(&dhash->bigLock);
     RedisModule_Free(dhash);
 }

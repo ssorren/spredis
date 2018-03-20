@@ -71,10 +71,10 @@ int SpredisSetGeoResolver_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);   
     }
 
-    SPGeoScoreCont *scoreCont = RedisModule_ModuleTypeGetValue(scoreKey);
+    SPScoreCont *scoreCont = RedisModule_ModuleTypeGetValue(scoreKey);
     SpExpResolverCont* cont = _SpredisInitExpRslvr();
     SpredisSetRedisKeyValueType(key,SPEXPRTYPE,cont);
-    cont->set = scoreCont->set;
+    cont->set = scoreCont->st;
     cont->type = SPGeoExpType;
     cont->input = RedisModule_Calloc(2, sizeof(double));
     cont->resolve = SPResolveGeoScore;

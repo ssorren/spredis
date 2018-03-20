@@ -27,7 +27,6 @@ typedef struct _SPScoreCont {
 } SPScoreCont;
 
 
-
 SPScoreCont *SPScoreContInit();
 void SPScoreContDestroy(SPScoreCont *cont);
 void SpredisZSetRDBSave(RedisModuleIO *io, void *ptr);
@@ -37,7 +36,7 @@ void SpredisZSetFreeCallback(void *value);
 int SPScorePutValue(SPScoreCont *cont, spid_t id, double val);
 int SPScoreDel(SPScoreCont *cont, spid_t id, double val);
 int SpredisZSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
-int SpredisZSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+int SpredisZScoreLinkSet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int SpredisZSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int SpredisZSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 #endif

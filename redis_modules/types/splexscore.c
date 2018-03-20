@@ -12,18 +12,7 @@
 
 
 SPScoreCont *SPLexScoreContInit() {
-	SPScoreCont *cont = RedisModule_Alloc(sizeof(SPScoreCont));
-	// cont->set = kh_init(LEX);
-	// cont->btree = kb_init(LEX, SP_DEFAULT_TREE_SIZE);
-	// pthread_rwlock_init ( &cont->mutex, NULL );
-
     return SPScoreContInit();
-    // cont->btree = kb_init(SCORESET, SP_DEFAULT_TREE_SIZE);
-    // pthread_rwlock_init ( &cont->mutex, NULL);
-    // cont->st = kh_init(SORTTRACK);
-    // return cont;
-
-	return cont;
 }
 
 
@@ -47,21 +36,22 @@ void SPLexScoreContDestroy(SPScoreCont *cont) {
 void SpredisZLexSetRDBSave(RedisModuleIO *io, void *ptr) {
     SPScoreCont *cont = ptr;
     SpredisProtectReadMap(cont);
+    RedisModule_SaveSigned(io, cont->sort);
     SPWriteLexSetToRDB(io, cont->btree);
     SpredisUnProtectMap(cont);
 }
 
 
 void SpredisZLexSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value) {
-	SPScoreCont *dhash = value;
-    // SPScore *s;
-    // kh_foreach_value(dhash->set, s, {
-    // 	char ress[32];
-    //     sprintf(ress, "%" PRIx64, (unsigned long long)s->id);
-    //     char score[50];
-    //     sprintf(score, "%1.17g" ,s->score);
-    //     RedisModule_EmitAOF(aof,"spredis.zladd","sccc", key, ress, score, s->lex);
-    // });
+	SPScoreCont *cont = value;
+    SPPtrOrD_t val;
+    spid_t id;
+    sp_scoreset_each(LEXSET, cont->btree, val, id, {
+        const char *vkey =  (const char *)val;
+        char ress[32];
+        sprintf(ress, "%" PRIx64, (unsigned long long)id);
+        RedisModule_EmitAOF(aof,"spredis.zladd","sclc", key, ress, cont->sort, vkey);
+    });
 }
 
 
@@ -74,7 +64,8 @@ void *SpredisZLexSetRDBLoad(RedisModuleIO *io, int encver) {
     
     SPScoreCont *cont = SPLexScoreContInit();
     SpredisProtectWriteMap(cont);
-    SPReadLexSetFromRDB(io, cont->btree, NULL);
+    cont->sort = RedisModule_LoadSigned(io);
+    SPReadLexSetFromRDB(io, cont->btree, (cont->sort ? cont->st : NULL));
     SpredisUnProtectMap(cont);
     return cont;
 }
@@ -93,9 +84,10 @@ void SpredisZLexSetFreeCallback(void *value) {
 }
 
 
-int SPLexScorePutValue(SPScoreCont *cont, spid_t id, const char *lexValue, double val) {
+int SPLexScorePutValue(SPScoreCont *cont, spid_t id, const char *lexValue, int sort) {
 	SpredisProtectWriteMap(cont);
-    SPAddLexScoreToSet(cont->btree, NULL, id, (SPPtrOrD_t)lexValue);
+    if (sort) cont->sort = sort;
+    SPAddLexScoreToSet(cont->btree, (sort ? cont->st : NULL), id, (SPPtrOrD_t)lexValue);
 	// SPScore *score;
 	// khint_t k;
 	// int absent;
@@ -134,7 +126,7 @@ int SPLexScorePutValue(SPScoreCont *cont, spid_t id, const char *lexValue, doubl
 
 int SPLexScoreDel(SPScoreCont *cont, spid_t id, const char *lexValue) {
 	SpredisProtectWriteMap(cont);
-    SPRemLexScoreFromSet(cont->btree, NULL, id, (SPPtrOrD_t)lexValue);
+    SPRemLexScoreFromSet(cont->btree, (cont->sort ? cont->st : NULL), id, (SPPtrOrD_t)lexValue);
 	// SPScore *score;
 	// khint_t k;
 	int res = 0;
@@ -168,14 +160,14 @@ int SpredisZLexSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
     if (HASH_NOT_EMPTY_AND_WRONGTYPE(key, &keyType, SPZLSETTYPE) != 0) {
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);   
     }
-    double scores[keyCount]; 
+    long long sorts[keyCount]; 
     for (int i = 0; i < keyCount; ++i)
     {
         argIndex++;
-        int scoreRes = RedisModule_StringToDouble(argv[argIndex++], &(scores[i]));
+        int scoreRes = RedisModule_StringToLongLong(argv[argIndex++], &(sorts[i]));
         if (scoreRes != REDISMODULE_OK) {
         	// RedisModule_CloseKey(key);
-            return RedisModule_ReplyWithError(ctx, "ERR Could not convert score to double");
+            return RedisModule_ReplyWithError(ctx, "ERR Could not convert score to long long");
         }
         argIndex++;
     }
@@ -194,7 +186,7 @@ int SpredisZLexSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
         spid_t id = strtoll(RedisModule_StringPtrLen(argv[argIndex++],NULL), NULL, 16);//TOINTKEY(argv[2]);
         
         argIndex++;
-        setCount += SPLexScorePutValue(dhash, id, RedisModule_StringPtrLen(argv[argIndex++], NULL) , scores[i]);	
+        setCount += SPLexScorePutValue(dhash, id, RedisModule_StringPtrLen(argv[argIndex++], NULL) , (int)sorts[i]);	
         
     }
     /* if we've aleady seen this id, just set the score */
@@ -205,11 +197,17 @@ int SpredisZLexSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
 }
 
 
-int SpredisZLexSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int SpredisZLexLinkSet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
-    if (argc != 3) return RedisModule_WrongArity(ctx);
+    if (argc != 4) return RedisModule_WrongArity(ctx);
     RedisModuleKey *key = RedisModule_OpenKey(ctx,argv[1],
             REDISMODULE_READ);
+
+    RedisModuleKey *store = RedisModule_OpenKey(ctx,argv[2],
+            REDISMODULE_WRITE);
+
+    const char * value = RedisModule_StringPtrLen(argv[3], NULL);
+
     int keyType;
 
     if (HASH_NOT_EMPTY_AND_WRONGTYPE(key, &keyType, SPZLSETTYPE) != 0) {
@@ -217,21 +215,26 @@ int SpredisZLexSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **ar
     }
     if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_ReplyWithNull(ctx);
-        // RedisModule_CloseKey(key);
         return REDISMODULE_OK;
     }
+
+    if (HASH_NOT_EMPTY(store)) {
+        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);   
+    }
+
     SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
     SpredisProtectReadMap(cont);
- //    SPScore *score;
- //    spid_t id = TOINTKEY(argv[2]);
- //    khint_t k = kh_get(LEX, cont->set, id);
-	// if (kh_exist(cont->set, k)) {
-	// 	score = kh_value(cont->set, k);
-	// 	RedisModule_ReplyWithDouble(ctx, score->score);
-	// } else {
-		RedisModule_ReplyWithNull(ctx);
-	// }
-    // RedisModule_CloseKey(key);
+    SPScoreSetKey *p;
+    SPScoreSetKey search = {.value = (SPPtrOrD_t)value};
+    SpredisSetCont *result;
+    p = kb_getp(LEXSET, cont->btree, &search);
+    if (p) {
+        result = _SpredisInitWithLinkedSet(p->members->set, cont->mutex);
+    } else {
+        result = _SpredisInitSet();
+    }
+    SpredisSetRedisKeyValueType(store, SPSETTYPE, result);
+	RedisModule_ReplyWithLongLong(ctx, kh_size(result->set));
     SpredisUnProtectMap(cont);
     return REDISMODULE_OK;
 }
@@ -255,19 +258,17 @@ int SpredisZLexSetApplySortScores_RedisCommand(RedisModuleCtx *ctx, RedisModuleS
     SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
     SpredisProtectWriteMap(cont);
 
-  //   double newScore = 0;
-  //   SPScoreKey *skey;
-  //   SPScore *score;
-  //   kbitr_t itr;
-  //   kb_itr_first(LEX, cont->btree, &itr); // get an iterator pointing to the first
-  //   while (kb_itr_valid(&itr)) { // move on
-  //       skey = &kb_itr_key(SPScoreKey, &itr);
-  //       if (skey != NULL && skey->value != NULL) {
-  //       	score = skey->value;
-  //       	score->score = ++newScore;        	
-  //       }
-		// kb_itr_next(LEX, cont->btree, &itr);
-  //   }
+    double newScore = 0;
+    SPScoreSetKey *skey;
+    kbitr_t itr;
+    kb_itr_first(LEXSET, cont->btree, &itr); // get an iterator pointing to the first
+    while (kb_itr_valid(&itr)) { // move on
+        skey = &kb_itr_key(SPScoreSetKey, &itr);
+        if (skey != NULL && skey->members != NULL) {
+        	skey->members->score = ++newScore;        	
+        }
+		kb_itr_next(LEXSET, cont->btree, &itr);
+    }
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     // RedisModule_CloseKey(key);
     SpredisUnProtectMap(cont);

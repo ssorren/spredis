@@ -4,6 +4,20 @@
 
 #include "../spredis.h"
 
+
+#define sp_scoreset_each(type, ss, kvar, idvar, code) {  \
+	kbitr_t ___itr; \
+    SPScoreSetKey *___p; \
+    kb_itr_first(type, (ss), &___itr); \
+    for (; kb_itr_valid(&___itr); kb_itr_next(type, (ss), &___itr)) { \
+        ___p = &kb_itr_key(SPScoreSetKey, &___itr); \
+        kvar = ___p->value; \
+        kh_foreach_key(___p->members->set, idvar, { \
+            code \
+        }); \
+    } \
+}
+
 void SPAddScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value);
 void SPAddLexScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value);
 void SPAddGeoScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value);

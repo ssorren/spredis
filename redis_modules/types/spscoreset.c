@@ -162,7 +162,10 @@ void SPDestroyScoreSet(kbtree_t(SCORESET) *ss)
     kb_itr_first(SCORESET, ss, &itr); // get an iterator pointing to the first
     for (; kb_itr_valid(&itr); kb_itr_next(SCORESET, ss, &itr)) { // move on
         p = &kb_itr_key(SPScoreSetKey, &itr);
-        RedisModule_Free(p);
+        if (p->members) {
+            kh_destroy(SIDS, p->members->set); \
+            RedisModule_Free(p->members); \
+        }
     }
     kb_destroy(SCORESET, ss);
 }
@@ -175,7 +178,10 @@ void SPDestroyLexScoreSet(kbtree_t(SCORESET) *ss)
     for (; kb_itr_valid(&itr); kb_itr_next(SCORESET, ss, &itr)) { // move on
         p = &kb_itr_key(SPScoreSetKey, &itr);
         if (p->value) RedisModule_Free((char *)p->value);
-        RedisModule_Free(p);
+        if (p->members) {
+            kh_destroy(SIDS, p->members->set); \
+            RedisModule_Free(p->members); \
+        }
     }
     kb_destroy(SCORESET, ss);
 }

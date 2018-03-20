@@ -36,6 +36,15 @@ int HASH_NOT_EMPTY_AND_WRONGTYPE(RedisModuleKey *key, int *type, int targetType)
     return 0;
 }
 
+int HASH_NOT_EMPTY(RedisModuleKey *key) {
+    int keyType = RedisModule_KeyType(key);
+    if (keyType != REDISMODULE_KEYTYPE_EMPTY)
+    {
+        return 1;
+    }
+    return 0;
+}
+
 int HASH_NOT_EMPTY_AND_WRONGTYPE_CHECKONLY(RedisModuleKey *key, int *type, int targetType) {
     int keyType = RedisModule_KeyType(key);
     (*type) = keyType;
@@ -383,8 +392,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         SpredisZSetAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.zscore",
-        SpredisZSetScore_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+    if (RedisModule_CreateCommand(ctx,"spredis.zlinkset",
+        SpredisZScoreLinkSet_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx,"spredis.zrem",
@@ -400,9 +409,13 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         SpredisZLexSetAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.zlscore",
-        SpredisZLexSetScore_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+
+
+    if (RedisModule_CreateCommand(ctx,"spredis.zllinkset",
+        SpredisZLexLinkSet_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
+
+
 
     if (RedisModule_CreateCommand(ctx,"spredis.zlrem",
         SpredisZLexSetRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)

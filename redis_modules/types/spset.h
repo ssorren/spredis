@@ -20,6 +20,7 @@
 typedef struct _SpredisSetCont {
 	khash_t(SIDS) *set;
 	pthread_rwlock_t mutex;
+	int linkedSet;
 } SpredisSetCont;
 
 // void * _SpredisInitSet();
@@ -31,6 +32,7 @@ typedef struct _SpredisSetCont {
 // SpredisSetCont *SpredisSUnion(SpredisSetCont **sets, int count);
 
 void * _SpredisInitSet();
+void * _SpredisInitWithLinkedSet(khash_t(SIDS) *s, pthread_rwlock_t rwlock);
 void SPSetCommandInit();
 void _SpredisDestroySet(void *dhash);
 void SpredisSetRDBSave(RedisModuleIO *io, void *ptr);

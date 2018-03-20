@@ -146,7 +146,7 @@ void SpredisZGeoSetFreeCallback(void *value) {
 int SPGeoScorePutValue(SPScoreCont *cont, spid_t id, uint16_t pos, double lat, double lon) {
 	SpredisProtectWriteMap(cont);
     SPPtrOrD_t val = (SPPtrOrD_t)SPGeoHashEncode(lat, lon);
-    SPAddGeoScoreToSet(cont->btree, NULL, id, (SPPtrOrD_t)val);
+    SPAddGeoScoreToSet(cont->btree, cont->st, id, (SPPtrOrD_t)val);
     SpredisUnProtectMap(cont);
 	return 1;
 }
@@ -155,7 +155,7 @@ int SPGeoScorePutValue(SPScoreCont *cont, spid_t id, uint16_t pos, double lat, d
 int SPGeoScoreDel(SPScoreCont *cont, spid_t id, double lat, double lon) {
 	SpredisProtectWriteMap(cont);
     SPPtrOrD_t val = (SPPtrOrD_t)SPGeoHashEncode(lat, lon);
-    SPRemGeoScoreFromSet(cont->btree, NULL, id, (SPPtrOrD_t)val);
+    SPRemGeoScoreFromSet(cont->btree, cont->st, id, (SPPtrOrD_t)val);
 	SpredisUnProtectMap(cont);
 	return 1;
 }
@@ -167,20 +167,21 @@ void SpredisZGeoSetRDBSave(RedisModuleIO *io, void *ptr) {
 
 
 void SpredisZGeoSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value) {
-	// SPScoreCont *dhash = value;
- //    SPScore *s;
- //    double lat, lon;
- //    kh_foreach_value(dhash->set, s, {
+    SPScoreCont *cont = value;
+    SPPtrOrD_t val;
+    spid_t id;
+    double lat, lon;
+    sp_scoreset_each(GEOSET, cont->btree, val, id, {
+        SPGeoHashDecode(val, &lat, &lon);
+        char ress[32];
+        sprintf(ress, "%" PRIx64, (unsigned long long)id);
+        char slat[50];
+        sprintf(slat, "%1.17g" ,lat);
+        char slon[50];
+        sprintf(slon, "%1.17g" ,lon);
+        RedisModule_EmitAOF(aof,"spredis.geoadd","sclcc", key, ress, 0, slat, slon);
+    });
 
- //        SPGeoHashDecode(s->score, &lat, &lon);
- //    	char ress[32];
- //        sprintf(ress, "%" PRIx64, (unsigned long long)s->id);
- //        char slat[50];
- //        sprintf(slat, "%1.17g" ,lat);
- //        char slon[50];
- //        sprintf(slon, "%1.17g" ,lon);
- //        RedisModule_EmitAOF(aof,"spredis.geoadd","sclcc", key, ress, 0, slat, slon);
- //    });
 }
 
 void *SpredisZGeoSetRDBLoad(RedisModuleIO *io, int encver) {

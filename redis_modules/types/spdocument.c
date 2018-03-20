@@ -49,7 +49,7 @@ void *SpredisDocRDBLoad(RedisModuleIO *io, int encver) {
     SPDocContainer *dc = SPDocContainerInit();
     dc->newRecordId = RedisModule_LoadUnsigned(io);
     size_t count = (size_t)RedisModule_LoadUnsigned(io);
-    printf("Loading %llu, count:%zu\n", dc->newRecordId, count);
+    // printf("Loading %llu, count:%zu\n", dc->newRecordId, count);
     khint_t k;
     int absent;
     for (size_t i = 0; i < count; ++i)
@@ -141,49 +141,37 @@ int SpredisDocAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);   
     }
 
-    // SpredisLog(ctx, "A");
     SPDocContainer *dc;
     if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
-        // SpredisLog(ctx, "B");
         dc = SPDocContainerInit();
         SpredisSetRedisKeyValueType(key,SPDOCTYPE,dc);
     } else {
-        // SpredisLog(ctx, "C");
         dc = RedisModule_ModuleTypeGetValue(key);
     }
     khint_t k;
     spid_t rid;
     int absent;
-    // printf("D %d, %s\n", (dc->idMap == NULL), stringId);
     k = kh_get(DOCID, dc->idMap, stringId);
-    // printf("D.1 %d\n", kh_exist(dc->idMap, k));
 
     if (k != kh_end(dc->idMap)) {
-        // SpredisLog(ctx, "E");
         rid = kh_value(dc->idMap, k);
     } else {
-        // SpredisLog(ctx, "F");
         rid = _SPNewRecordId(dc);
         stringId = RedisModule_Strdup(stringId);
-        // SpredisLog(ctx, "G");
         k = kh_put(DOCID, dc->idMap, stringId, &absent);
-        // SpredisLog(ctx, "H");
         kh_value(dc->idMap, k) = rid;
     }
-    // SpredisLog(ctx, "I");
     k = kh_put(DOC, dc->documents, rid, &absent);
     if (!absent) {
         char *old = (char *)kh_value(dc->documents, k);
         if (old != NULL) RedisModule_Free(old);
     }
     kh_value(dc->documents, k) = RedisModule_Strdup(data);
-    // printf("%s\n", kh_value(dc->documents, k));
     RedisModule_ReplyWithArray(ctx, 2);
     RedisModule_ReplyWithLongLong(ctx, rid);
 
     char ress[32];
     sprintf(ress, "%" PRIx64, (unsigned long long)rid);
-    // SpredisLog(ctx, "K");
     RedisModule_ReplyWithStringBuffer(ctx, ress, strlen(ress));
 
     return REDISMODULE_OK;

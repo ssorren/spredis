@@ -75,6 +75,7 @@ void kt_for(int n_threads, void (*func)(void*,long,int), void *data, long n);
 
 int HASH_NOT_EMPTY_AND_WRONGTYPE(RedisModuleKey *key, int *type, int targetType);
 int HASH_NOT_EMPTY_AND_WRONGTYPE_CHECKONLY(RedisModuleKey *key, int *type, int targetType);
+int HASH_NOT_EMPTY(RedisModuleKey *key);
 int HASH_EMPTY_OR_WRONGTYPE(RedisModuleKey *key, int *type, int targetType);
 void SP_GET_KEYTYPES(RedisModuleKey *key, int *type, int *spType);
 
