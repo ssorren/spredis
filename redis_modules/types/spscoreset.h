@@ -18,13 +18,39 @@
     } \
 }
 
+
+#define SPAddAllToSet(svar, kvar, hintvar) { \
+	spid_t ___id; \
+    int ___absent; \
+    if ((hintvar) != NULL) { \
+	    khash_t(SIDS) *___smaller, *___larger; \
+	    if (kh_size(hintvar) < kh_size( ((kvar)->members->set) )) { \
+	        ___smaller = (hintvar); \
+	        ___larger = ((kvar)->members->set); \
+	    } else { \
+	        ___smaller = ((kvar)->members->set); \
+	        ___larger = (hintvar); \
+	    } \
+	    kh_foreach_key(___smaller,___id, { \
+	        if (kh_contains(SIDS, ___larger, ___id)) kh_put(SIDS, (svar), ___id, &___absent); \
+	    });    \
+    } else { \
+	    kh_foreach_key( ((kvar)->members->set) ,___id, { \
+	        kh_put(SIDS, (svar), ___id, &___absent); \
+	    }); 	\
+    } \
+}
+
+
+
+
 void SPAddScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value);
 void SPAddLexScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value);
 void SPAddGeoScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value);
 void SPRemScoreFromSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value);
 void SPRemLexScoreFromSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value);
 void SPRemGeoScoreFromSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value);
-void SPAddAllToSet(khash_t(SIDS) *set, SPScoreSetKey *key, khash_t(SIDS) *hint);
+// void SPAddAllToSet(khash_t(SIDS) *set, SPScoreSetKey *key, khash_t(SIDS) *hint);
 
 void SPWriteScoreSetToRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss);
 void SPWriteLexSetToRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss);

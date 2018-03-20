@@ -53,9 +53,9 @@ Here's the list of items that need to be completed to get out of pre-alpha phase
 - [ ] Automatic re-indexing after namespace config change
 - [ ] Implmentation of facets for non-literal (rank based) fields
 - [ ] Thorough examples and documentation
-- [ ] Finish TCP client (spredis-client)
-- [ ] Finish HTTP client
-- [ ] Finish HTTP server mode
-- [ ] Multi-clause queries ('or clause' support)
+- [x] Finish TCP client (spredis-client)
+- [x] Finish HTTP client
+- [x] Finish HTTP server mode
+- [x] Multi-clause queries ('or clause' support)
 - [ ] Support for Redis Sentinel
 

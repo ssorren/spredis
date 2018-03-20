@@ -94,35 +94,35 @@
     } \
 }
 
-void _SPAddAllToSetWithHint(khash_t(SIDS) *set, SPScoreSetKey *key, khash_t(SIDS) *hint) {
-    spid_t id;
-    int absent;
-    // if (key->members->singleId && kh_contains(SIDS, hint, key->members->singleId))
-    //     kh_put(SIDS, (set), (key)->members->singleId, &absent);
-    khash_t(SIDS) *smaller, *larger;
-    if (kh_size(hint) < kh_size(key->members->set)) {
-        smaller = hint;
-        larger = key->members->set;
-    } else {
-        smaller = key->members->set;
-        larger = hint;
-    }
-    kh_foreach_key(smaller,id, {
-        if (kh_contains(SIDS, larger, id)) kh_put(SIDS, set, id, &absent);
-    });    
-}
+// static inline void _SPAddAllToSetWithHint(khash_t(SIDS) *set, SPScoreSetKey *key, khash_t(SIDS) *hint) {
+//     spid_t id;
+//     int absent;
+//     // if (key->members->singleId && kh_contains(SIDS, hint, key->members->singleId))
+//     //     kh_put(SIDS, (set), (key)->members->singleId, &absent);
+//     khash_t(SIDS) *smaller, *larger;
+//     if (kh_size(hint) < kh_size(key->members->set)) {
+//         smaller = hint;
+//         larger = key->members->set;
+//     } else {
+//         smaller = key->members->set;
+//         larger = hint;
+//     }
+//     kh_foreach_key(smaller,id, {
+//         if (kh_contains(SIDS, larger, id)) kh_put(SIDS, set, id, &absent);
+//     });    
+// }
 
-void SPAddAllToSet(khash_t(SIDS) *set, SPScoreSetKey *key, khash_t(SIDS) *hint) {
-    if (hint != NULL) {
-       _SPAddAllToSetWithHint(set, key, hint);
-       return; 
-    }
-	spid_t id;
-	int absent;
-    kh_foreach_key(key->members->set,id, {
-        kh_put(SIDS, set, id, &absent);
-    });    
-}
+// void SPAddAllToSet(khash_t(SIDS) *set, SPScoreSetKey *key, khash_t(SIDS) *hint) {
+//     if (hint != NULL) {
+//        _SPAddAllToSetWithHint(set, key, hint);
+//        return; 
+//     }
+// 	spid_t id;
+// 	int absent;
+//     kh_foreach_key(key->members->set,id, {
+//         kh_put(SIDS, set, id, &absent);
+//     });    
+// }
 
 void SPAddScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value)
 {
