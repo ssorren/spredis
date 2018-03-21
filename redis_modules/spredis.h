@@ -120,6 +120,7 @@ void SpredisWarn(RedisModuleCtx *ctx, const char *fmt,...);
 #include "commands/spmcsort.h"
 #include "commands/sprangestore.h"
 #include "commands/spfacet.h"
+#include "commands/spfacetrange.h"
 #include "types/sptempresult.h"
 #include "types/spdocument.h"
 

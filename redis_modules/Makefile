@@ -35,7 +35,7 @@ MODULE_SO = spredis.so
 
 DEPS = 	$(TYPEDIR)/sptempresult.o $(TYPEDIR)/spset.o $(TYPEDIR)/spscore.o $(TYPEDIR)/splexscore.o $(TYPEDIR)/sphash.o $(TYPEDIR)/spscoreset.o\
 		$(TYPEDIR)/spexpresolver.o $(TYPEDIR)/spgeo.o $(TYPEDIR)/spdocument.o\
-		$(COMDIR)/spfacet.o $(COMDIR)/spmcsort.o $(COMDIR)/sprangestore.o\
+		$(COMDIR)/spfacet.o $(COMDIR)/spfacetrange.o $(COMDIR)/spmcsort.o $(COMDIR)/sprangestore.o\
 		$(LIBDIR)/thpool.o $(LIBDIR)/sp_parallelqueue.o $(LIBDIR)/kexpr.o $(LIBDIR)/geohash.o\
 
 export

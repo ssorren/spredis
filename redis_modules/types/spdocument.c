@@ -73,7 +73,9 @@ void *SpredisDocRDBLoad(RedisModuleIO *io, int encver) {
         k = kh_put(DOCID, dc->idMap, strKey, &absent);
         kh_value(dc->idMap, k) = rid;
         k = kh_put(DOC, dc->documents, rid, &absent);
-        kh_value(dc->documents, k) = doc;        
+        kh_value(dc->documents, k) = doc;
+        k = kh_put(DOC, dc->revId, rid, &absent);
+        kh_value(dc->revId, k) = strKey;
     }
 
     return dc;
@@ -91,6 +93,7 @@ SPDocContainer *SPDocContainerInit() {
     SPDocContainer *dc = RedisModule_Calloc(1, sizeof(SPDocContainer));
     dc->documents = kh_init(DOC);
     dc->idMap = kh_init(DOCID);
+    dc->revId = kh_init(DOC);
     return dc;
 }
 
@@ -108,6 +111,7 @@ void SPDocContainerDestroy(SPDocContainer *dc) {
         }
     }
     kh_destroy(DOC, dc->documents);
+    kh_destroy(DOC, dc->revId);
     RedisModule_Free(dc);
 }
 
@@ -160,6 +164,8 @@ int SpredisDocAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
         stringId = RedisModule_Strdup(stringId);
         k = kh_put(DOCID, dc->idMap, stringId, &absent);
         kh_value(dc->idMap, k) = rid;
+        k = kh_put(DOC, dc->revId, rid, &absent);
+        kh_value(dc->revId, k) = stringId;
     }
     k = kh_put(DOC, dc->documents, rid, &absent);
     if (!absent) {
@@ -212,9 +218,11 @@ int SpredisDocRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
             if (doc != NULL) RedisModule_Free(doc);
             kh_del(DOC, dc->documents, k);
         }
-        
+        k = kh_get(DOC, dc->revId, rid);
+        if (k != kh_end(dc->revId)) {
+            kh_del(DOC, dc->revId, k);
+        }
         RedisModule_ReplyWithLongLong(ctx, 1);
-
     } else {
         RedisModule_ReplyWithLongLong(ctx, 0);
     }

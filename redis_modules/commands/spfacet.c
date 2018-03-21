@@ -13,8 +13,8 @@
 // };
 
 // KHASH_MAP_INIT_STR(SPREDISFACET, long long) ;
-typedef khash_t(HASH) khash_t(FHASH);
-KHASH_MAP_INIT_INT64(FHASH, SPHashValue*);
+// typedef khash_t(HASH) khash_t(FHASH);
+// KHASH_MAP_INIT_INT64(FHASH, SPHashValue*);
 
 typedef struct _SPFacetResult {
 	const char *val;
@@ -101,13 +101,13 @@ void SPThreadedFacet_FreePriv(void *prv)
 	RedisModule_Free(targ);
 }
 
-typedef struct {
-	SPFacetData **facets;
-	SpredisSortData *d;
-	SPFacetResult **valMaps;
-	uint8_t facetCount;
-	size_t start, end;
-} SPPopFacetArg;
+// typedef struct {
+// 	SPFacetData **facets;
+// 	SpredisSortData *d;
+// 	SPFacetResult **valMaps;
+// 	uint8_t facetCount;
+// 	size_t start, end;
+// } SPPopFacetArg;
 
 void SPThreadedFacet(void *arg) {
 	SPThreadedFacetArg *targ = arg;
@@ -140,7 +140,7 @@ void SPThreadedFacet(void *arg) {
 		while(keyI) {
 			facet = facets[--keyI];
 			if (facet->type == SPHASHTYPE) {
-				k = kh_get(FHASH, facet->col->set, d->id);
+				k = kh_get(HASH, facet->col->set, d->id);
 
 				if (k == kh_end(facet->col->set) || !kh_exist(facet->col->set, k)) continue;
 				av = kh_value(facet->col->set, k);//SpredisSMapValue(facet->col, d->id);
@@ -316,7 +316,7 @@ int SpredisFacets_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
 		targ->datas = res->data;
 		targ->dataCount = res->size;
 
-	     SP_TWORK(SPThreadedFacet, targ, {
+	    SP_TWORK(SPThreadedFacet, targ, {
 	        printf("could not create thread..No soup for you!\n");
 	    	RedisModule_AbortBlock(bc);
 	    	__SPCloseAllFacets(facets, keyCount);

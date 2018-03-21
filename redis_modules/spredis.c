@@ -344,10 +344,15 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
 
 
-     if (RedisModule_CreateCommand(ctx,"spredis.facets",
+    if (RedisModule_CreateCommand(ctx,"spredis.facets",
         SpredisFacets_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
+    if (RedisModule_CreateCommand(ctx,"spredis.rangefacets",
+        SpredisFacetRange_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+    
+    
     if (RedisModule_CreateCommand(ctx,"spredis.getresids",
         SpredisTMPResGetIds_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;

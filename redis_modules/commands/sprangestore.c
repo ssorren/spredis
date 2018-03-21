@@ -24,6 +24,8 @@ typedef struct {
     SPScoreCont *geoCont;
     SpredisSetCont *hintCont;
     SpredisSetCont *resCont;
+    SPHashCont *radiusField;
+    const char * units;
 } SPStoreRadiusTarg;
 
 int SPThreadedGenericLongReply(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
@@ -53,9 +55,104 @@ void SPFreeSPStoreRadiusTarg(void *arg) {
     RedisModule_Free(arg);
 }
 
+void SpredisStoreRangeByRadiusField_Thread(SPStoreRadiusTarg *targ) {
+
+    SpredisProtectReadMap(targ->geoCont);
+    if (targ->hintCont) SpredisProtectReadMap(targ->hintCont);
+    SpredisProtectReadMap(targ->resCont);
+
+    double slat = targ->slat;
+    double slon = targ->slon;
+    double radius = DBL_MAX;
+
+    SPScoreCont *geoCont = targ->geoCont;
+    SpredisSetCont *resCont = targ->resCont;
+    SPHashCont *radiusCont = targ->radiusField;
+
+
+    khash_t(SIDS) *hint = NULL;
+    SpredisSetCont *hintCont = targ->hintCont;
+    if (hintCont!= NULL) hint = hintCont->set;
+
+    double lat, lon, distance;
+
+    kbtree_t(GEOSET) *geoTree = geoCont->btree;
+    SPScoreSetKey *candKey;
+    
+    khash_t(SIDS) *res = resCont->set;
+    khash_t(SIDS) *members;
+    spid_t id;
+    khint_t k;
+    int absent;
+    uint16_t pos;
+    SPHashValue *av;
+    khash_t(SORTTRACK) *st = geoCont->st;
+    if (hint == NULL) {
+        // this is the worst case scenario
+        // we'll have to calculate distance for every document
+        kbitr_t itr;
+        kb_itr_first(GEOSET, geoTree, &itr);
+        for (; kb_itr_valid(&itr); kb_itr_next(GEOSET, geoTree, &itr)) { // move on
+            candKey = (&kb_itr_key(SPScoreSetKey, &itr));
+            if (candKey) {
+                SPGeoHashDecode(candKey->value, &lat, &lon);
+                distance = SPGetDist(slat, slon, lat, lon);
+                members = candKey->members->set;
+                kh_foreach_key( members , id, {
+                    k = kh_get(HASH, radiusCont->set, id);
+                    if (k != kh_end(radiusCont->set)) {
+                        av = kh_value(radiusCont->set, k);
+                        kv_foreach_hv_value(av, &radius, &pos, {
+                            if (distance <= radius) {
+                                kh_put(SIDS, res, id, &absent);
+                                break;
+                            }
+                        });
+                    } else {
+                        //we have no distance. we're going to assume this record is interesetd in all distances
+                        kh_put(SIDS, res, id, &absent);
+                    }
+                }); 
+            }
+        }     
+    } else {
+
+        kh_foreach_key(hint , id, {
+            k = kh_get(SORTTRACK, st, id);
+            if (k != kh_end(st)) {
+                SPGeoHashDecode((kh_value(st, k))->score, &lat, &lon);
+                distance = SPGetDist(slat, slon, lat, lon);
+                k = kh_get(HASH, radiusCont->set, id);
+                    if (k != kh_end(radiusCont->set)) {
+                    av = kh_value(radiusCont->set, k);
+                    kv_foreach_hv_value(av, &radius, &pos, {
+                        if (distance <= radius) {
+                            kh_put(SIDS, res, id, &absent);
+                            break;
+                        }
+                    });
+                } else {
+                    //we have no distance. we're going to assume this record is interesetd in all distances
+                    kh_put(SIDS, res, id, &absent);
+                }
+            }
+        });
+
+    }
+           
+    // RedisModule_ZsetRangeStop(key);
+    targ->reply = kh_size(res);
+    SpredisUnProtectMap(geoCont);
+    if (hintCont) SpredisUnProtectMap(hintCont);
+    SpredisUnProtectMap(resCont);
+
+    RedisModule_UnblockClient(targ->bc,targ);
+}
 
 void SpredisStoreRangeByRadius_Thread(SPStoreRadiusTarg *targ) {
     // SPStoreRadiusTarg *targ = arg;
+    if (targ->radiusField != NULL) return SpredisStoreRangeByRadiusField_Thread(targ);
+
     SpredisProtectReadMap(targ->geoCont);
     if (targ->hintCont) SpredisProtectReadMap(targ->hintCont);
     SpredisProtectReadMap(targ->resCont);
@@ -102,9 +199,7 @@ void SpredisStoreRangeByRadius_Thread(SPStoreRadiusTarg *targ) {
                     if (candKey->value >= stop) break;
                     SPGeoHashDecode(candKey->value, &lat, &lon);
                     if (SP_INBOUNDS(lat, lon, bounds) && SPGetDist(slat, slon, lat, lon) <= radius) {
-
                         SPAddAllToSet(res, candKey, hint);
-                        // kh_put(SIDS, res, candKey->id, &absent);
                     }
                 }
             }
@@ -124,7 +219,7 @@ void SpredisStoreRangeByRadius_Thread(SPStoreRadiusTarg *targ) {
 
 int SpredisStoreRangeByRadius_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx); /* Use automatic memory management. */
-    if (argc != 8) return RedisModule_WrongArity(ctx);
+    if (argc != 8 && argc != 9) return RedisModule_WrongArity(ctx);
     
 
     RedisModuleKey *key = RedisModule_OpenKey(ctx,argv[2], REDISMODULE_READ);
@@ -155,12 +250,29 @@ int SpredisStoreRangeByRadius_RedisCommand(RedisModuleCtx *ctx, RedisModuleStrin
     if (pres != REDISMODULE_OK) return RedisModule_ReplyWithError(ctx, "ERR could not parse latitude");
     pres = RedisModule_StringToDouble(argv[5], &slon);
     if (pres != REDISMODULE_OK) return RedisModule_ReplyWithError(ctx, "ERR could not parse longitude");
-    pres = RedisModule_StringToDouble(argv[6], &radius);
-    if (pres != REDISMODULE_OK) return RedisModule_ReplyWithError(ctx, "ERR could not parse radius");
 
     const char * units = RedisModule_StringPtrLen(argv[7], NULL);
-    radius = SPConvertToMeters(radius, units);
-   
+    SPHashCont *radiusField = NULL;
+    if (argc == 8) {
+        pres = RedisModule_StringToDouble(argv[6], &radius);
+        if (pres != REDISMODULE_OK) return RedisModule_ReplyWithError(ctx, "ERR could not parse radius");
+        
+        radius = SPConvertToMeters(radius, units);
+    } else {
+        //we're using a field ptr;
+        radius = DBL_MAX;
+        RedisModuleKey *rfield = RedisModule_OpenKey(ctx,argv[8],
+            REDISMODULE_WRITE|REDISMODULE_READ);
+        if (HASH_EMPTY_OR_WRONGTYPE(rfield, &keyType ,SPHASHTYPE) == 1) {;
+            return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
+        }
+
+        radiusField = RedisModule_ModuleTypeGetValue(rfield);
+        if (radiusField->valueType != SPHashDoubleType) {
+            return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
+        }
+
+    }
 
     RedisModuleString *hintName = argv[3];
     size_t len;
@@ -203,10 +315,11 @@ int SpredisStoreRangeByRadius_RedisCommand(RedisModuleCtx *ctx, RedisModuleStrin
     targ->slon = slon;
     targ->radius = radius;
     targ->geoCont = geoCont;
-
     targ->hintCont = hintCont;
-
     targ->resCont = resCont;
+    targ->radiusField = radiusField;
+    targ->units = units;
+
     SpredisProtectReadMap(geoCont);
     if (hintCont) SpredisProtectReadMap(hintCont);
     SpredisProtectReadMap(resCont);
@@ -266,9 +379,6 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
     	hintKey = RedisModule_OpenKey(ctx,argv[3], REDISMODULE_READ);
     	int hintType;
     	if (HASH_NOT_EMPTY_AND_WRONGTYPE_CHECKONLY(hintKey, &hintType ,SPSETTYPE) == 1) {
-    		// RedisModule_CloseKey(key);
-		    // RedisModule_CloseKey(store);
-		    // RedisModule_CloseKey(hintKey);
             SPUnlockContext(ctx);
 		    return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
     	}
@@ -325,10 +435,7 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
     } else {
         kb_itr_first(SCORESET, testScore, &itr);
     }
-    // printf("Searching, min=%f max=%f,\n", min, max);
-
-    for (; kb_itr_valid(&itr); kb_itr_next(SCORESET, testScore, &itr)) { // move on
-
+    for (; kb_itr_valid(&itr); kb_itr_next(SCORESET, testScore, &itr)) {
         cand = (&kb_itr_key(SPScoreSetKey, &itr));
         if (cand) {
             if (reached || GT(cand->value, min)) {
@@ -344,9 +451,6 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
     SpredisUnProtectMap(testScoreCont);
     if (hintCont) SpredisUnProtectMap(hintCont);
     RedisModule_ReplyWithLongLong(ctx,kh_size(res));
-    // RedisModule_CloseKey(key);
-    // RedisModule_CloseKey(store);
-    // RedisModule_CloseKey(hintKey);
     return REDISMODULE_OK;
 }
 
@@ -355,13 +459,13 @@ int SpredisStoreRangeByScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString
 }
 
 RedisModuleString * SP_RESOLVE_WILDCARD(RedisModuleCtx *ctx, RedisModuleString *string) {
+    // is this a wildcard? look for \xff at the end of the string
+    // redis is not converting this character for us unfortunately
     size_t len;
     const char *str = RedisModule_StringPtrLen(string,&len);
     if(len > 4 && !strcmp(str + len - 4, "\\xff")) {
-        // printf("Creating wildcard\n");
         char *new_str = RedisModule_Calloc(len - 3, sizeof(char));
         strncpy(new_str, str, len - 4);
-        // printf("Wildcard: %s%c\n", new_str , 0xff);
         string = RedisModule_CreateStringPrintf(ctx, "%s%c", new_str ,0xff);
         RedisModule_Free(new_str);
     }
@@ -413,12 +517,10 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     size_t ltLen = strlen((const char *)ltCmp);
 
     if ( ltLen > 0 && ( (unsigned char)(ltCmp[ ltLen - 1 ]) - 0xff) < 0) {
+        // we need to bump the length to handle the wildcard character
         ltLen += 1;
         gtLen += 1;
-        // printf("Don't Hava wildcard, %zu, %zu\n", ltLen, gtLen);
-    } else {
-        // printf("Hava wildcard, %s,%s,%zu, %zu\n", ltCmp, gtCmp, ltLen, gtLen);
-    }
+    } 
 
     RedisModuleString *hintName = argv[3];
     size_t len;
@@ -430,9 +532,6 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
         hintKey = RedisModule_OpenKey(ctx,argv[3], REDISMODULE_READ);
         int hintType;
         if (HASH_NOT_EMPTY_AND_WRONGTYPE_CHECKONLY(hintKey, &hintType ,SPSETTYPE) == 1) {
-            // RedisModule_CloseKey(key);
-            // RedisModule_CloseKey(store);
-            // RedisModule_CloseKey(hintKey);
             SPUnlockContext(ctx);
             return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
         }
@@ -466,16 +565,6 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     kb_intervalp(LEXSET, testLex, &t, &l, &u);
     SPUnlockContext(ctx);
 
-    // if (l == NULL) {
-    //     // printf("WTF1111, %d\n", u == NULL);
-    //     RedisModule_ReplyWithLongLong(ctx,0);
-    //     // RedisModule_CloseKey(key);
-    //     // RedisModule_CloseKey(store);
-    //     // RedisModule_CloseKey(hintKey);
-    //     return REDISMODULE_OK;
-    // }
-
-
     int reached = 0;
     if (l != NULL) {
         kb_itr_getp(LEXSET, testLex, l, &itr); // get an iterator pointing to the first    
@@ -485,7 +574,6 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     for (; kb_itr_valid(&itr); kb_itr_next(LEXSET, testLex, &itr)) { // move on
         cand = &kb_itr_key(SPScoreSetKey, &itr);
         if (cand) {
-            // printf("%s,%u,, %d, %d\n", cand->lex, cand->id, memcmp(gtCmp, cand->lex, gtLen ),  memcmp(cand->lex, ltCmp, ltLen ));
             if (reached || GT(memcmp(gtCmp, (const unsigned char *)cand->value, gtLen ))) {
                 if (LT(memcmp((const unsigned char *)cand->value,ltCmp , ltLen ))) {
                     reached = 1;
@@ -500,9 +588,7 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     SpredisUnProtectMap(testLexCont);
     if (hintCont) SpredisUnProtectMap(hintCont);
     RedisModule_ReplyWithLongLong(ctx,kh_size(res));
-    // RedisModule_CloseKey(key);
-    // RedisModule_CloseKey(store);
-    // RedisModule_CloseKey(hintKey);
+
     return REDISMODULE_OK;
 }
 

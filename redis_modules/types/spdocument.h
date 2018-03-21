@@ -11,11 +11,13 @@ KHASH_MAP_INIT_INT64(DOC, const char*);
 KHASH_MAP_INIT_STR(DOCID, spid_t);
 
 typedef khash_t(DOC) SPDocMap;
+typedef khash_t(DOC) SPRevIdMap;
 typedef khash_t(DOCID) SPDocIdMap;
 
 typedef struct _SPDocContainer {
     spid_t newRecordId;
     SPDocMap *documents;
+    SPRevIdMap *revId;
     SPDocIdMap *idMap;
 } SPDocContainer;
 
