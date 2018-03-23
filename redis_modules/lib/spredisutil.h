@@ -34,7 +34,7 @@ static inline double  SPGetDist(double alat, double alon, double blat, double bl
 }
 
 
-#define SpredisProtectWriteMap(map) {while (pthread_rwlock_trywrlock(&map->mutex)) {sleep(1);}}
+#define SpredisProtectWriteMap(map) {while (pthread_rwlock_trywrlock(&map->mutex)) { usleep(75); }}
 #define SpredisProtectReadMap(map) pthread_rwlock_rdlock(&map->mutex)
 #define SpredisUnProtectMap(map) pthread_rwlock_unlock(&map->mutex)
 

@@ -19,7 +19,7 @@
     SP_FREE_SCORESET_KEY(key)
 
 
-#define SP_DOADD_SCORESET_AUX(type, ss, st, id, value, dup) { \
+#define SP_DOADD_SCORESET_AUX(type, ss, st, id, value, dup, resort) { \
     SPScoreSetKey ___search = {.value = (SPPtrOrD_t)(value)}; \
     SPScoreSetKey *___key = kb_getp(type, ss, &___search); \
     SPScoreSetKey __create; \
@@ -32,12 +32,14 @@
             __create.members->set = kh_init(SIDS); \
             ___key = &__create; \
             ___key->members->score = 0; /* score will be added later on apply sort */ \
+            if (resort != NULL) *(resort) = 1; \
 	    } else { \
             __create.value = (value); \
             __create.members = RedisModule_Calloc(1, sizeof(SPScoreSetMembers)); \
             __create.members->set = kh_init(SIDS); \
             ___key = &__create; \
             ___key->members->score = (value); \
+            if (resort != NULL) *(resort) = 0; \
 	    } \
         kb_putp(type, ss, ___key); \
     } \
@@ -49,8 +51,8 @@
 }
 
 
-#define SP_DOADD_SCORESET(type, ss, st, id, value) SP_DOADD_SCORESET_AUX(type, ss, st, id, value, 0)
-#define SP_DOADD_LEXSET(type, ss, st, id, value) SP_DOADD_SCORESET_AUX(type, ss, st, id, value, 1)
+#define SP_DOADD_SCORESET(type, ss, st, id, value) SP_DOADD_SCORESET_AUX(type, ss, st, id, value, 0, (int *)NULL)
+#define SP_DOADD_LEXSET(type, ss, st, id, value, vresort) SP_DOADD_SCORESET_AUX(type, ss, st, id, value, 1, (int *)vresort)
 
 #define SP_DEL_SCORESET_KEY(key, search) \
         SPScoreSetMembers *___mems = (key)->members; \
@@ -129,9 +131,9 @@ void SPAddScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, 
 	SP_DOADD_SCORESET(SCORESET, ss, st, id, value);
 }
 
-void SPAddLexScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value)
+void SPAddLexScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value, int *resort)
 {
-	SP_DOADD_LEXSET(LEXSET, ss, st, id, value);
+	SP_DOADD_LEXSET(LEXSET, ss, st, id, value, resort);
 }
 
 void SPAddGeoScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value)
@@ -269,7 +271,7 @@ void SPReadLexSetFromRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss, khash_t(SORT
         for (size_t k = 0; k < keyCount; ++k)
         {
             spid_t id = RedisModule_LoadUnsigned(io);
-            SPAddLexScoreToSet(ss, st, id, key);
+            SPAddLexScoreToSet(ss, st, id, key, (int *)NULL);
         }
         RedisModule_FreeString(RedisModule_GetContextFromIO(io),s);
     }

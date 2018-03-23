@@ -124,6 +124,8 @@ void SpredisWarn(RedisModuleCtx *ctx, const char *fmt,...);
 #include "types/sptempresult.h"
 #include "types/spdocument.h"
 
+#include "lib/spsortapplicator.h"
+
 
 
 #endif

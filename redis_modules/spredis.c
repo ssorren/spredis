@@ -304,6 +304,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         == REDISMODULE_ERR) return REDISMODULE_ERR;
 
     SPREDISMODULE_TYPES = RedisModule_Alloc(sizeof(RedisModuleType*) * 128);
+    SpredisSortAppInit();
     SpredisTempResultModuleInit();
     SpredisZsetMultiKeySortInit();
     SpredisFacetInit();

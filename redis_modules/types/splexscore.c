@@ -18,6 +18,11 @@ SPScoreCont *SPLexScoreContInit() {
 
 void SPLexScoreContDestroy(SPScoreCont *cont) {
 	SpredisProtectWriteMap(cont);
+
+    if (cont->sort) {
+        SpredisDQSort(cont);
+    }
+    
     SPDestroyLexScoreSet(cont->btree);
     // kbtree_t(SCORESET)* tree = cont->btree;  
  //    kb_destroy(SCORESET, tree);
@@ -66,6 +71,9 @@ void *SpredisZLexSetRDBLoad(RedisModuleIO *io, int encver) {
     SpredisProtectWriteMap(cont);
     cont->sort = RedisModule_LoadSigned(io);
     SPReadLexSetFromRDB(io, cont->btree, (cont->sort ? cont->st : NULL));
+    if (cont->sort) {
+        SpredisQSort(cont);
+    }
     SpredisUnProtectMap(cont);
     return cont;
 }
@@ -87,7 +95,11 @@ void SpredisZLexSetFreeCallback(void *value) {
 int SPLexScorePutValue(SPScoreCont *cont, spid_t id, const char *lexValue, int sort) {
 	SpredisProtectWriteMap(cont);
     if (sort) cont->sort = sort;
-    SPAddLexScoreToSet(cont->btree, (sort ? cont->st : NULL), id, (SPPtrOrD_t)lexValue);
+    int resort;
+    SPAddLexScoreToSet(cont->btree, (sort ? cont->st : NULL), id, (SPPtrOrD_t)lexValue, sort ? &resort : NULL);
+    if (sort && resort) {
+        SpredisQSort(cont);
+    }
 	// SPScore *score;
 	// khint_t k;
 	// int absent;
@@ -258,17 +270,17 @@ int SpredisZLexSetApplySortScores_RedisCommand(RedisModuleCtx *ctx, RedisModuleS
     SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
     SpredisProtectWriteMap(cont);
 
-    double newScore = 0;
-    SPScoreSetKey *skey;
-    kbitr_t itr;
-    kb_itr_first(LEXSET, cont->btree, &itr); // get an iterator pointing to the first
-    while (kb_itr_valid(&itr)) { // move on
-        skey = &kb_itr_key(SPScoreSetKey, &itr);
-        if (skey != NULL && skey->members != NULL) {
-        	skey->members->score = ++newScore;        	
-        }
-		kb_itr_next(LEXSET, cont->btree, &itr);
-    }
+  //   double newScore = 0;
+  //   SPScoreSetKey *skey;
+  //   kbitr_t itr;
+  //   kb_itr_first(LEXSET, cont->btree, &itr); // get an iterator pointing to the first
+  //   while (kb_itr_valid(&itr)) { // move on
+  //       skey = &kb_itr_key(SPScoreSetKey, &itr);
+  //       if (skey != NULL && skey->members != NULL) {
+  //       	skey->members->score = ++newScore;        	
+  //       }
+		// kb_itr_next(LEXSET, cont->btree, &itr);
+  //   }
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     // RedisModule_CloseKey(key);
     SpredisUnProtectMap(cont);
