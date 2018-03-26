@@ -8,10 +8,16 @@ function go(config) {
 	const body = require('koa-json-body')
 	const spredis = new Spredis(config ? config.redis : null);
 
+	const respondError = (ctx, e) => {
+		ctx.response.status = 500;
+		ctx.response.type='json';
+		ctx.response.body = {error: e.stack};
+	}
+
 	spredis.initialize().then( () => {
 		// let ns = spredis.defaultNamespace;
 		const app = new Koa();
-		app.use(body({ limit: '100kb', fallback: true }))
+		app.use(body({ limit: '512kb', fallback: true }))
 		const router = new Router();
 		router.get('/', (ctx, next) => {
 		  ctx.response.body = 'Looking for something?';
@@ -25,9 +31,7 @@ function go(config) {
 				ctx.response.type='json';
 				ctx.response.body = res;
 			} catch (e) {
-				ctx.response.status = 500;
-				ctx.response.type='json';
-				ctx.response.body = {error: e.stack};
+				respondError(ctx, e);
 			}
 		});
 
@@ -39,9 +43,7 @@ function go(config) {
 				ctx.response.type='json';
 				ctx.response.body = res;
 			} catch (e) {
-				ctx.response.status = 500;
-				ctx.response.type='json';
-				ctx.response.body = {error: e.stack};
+				respondError(ctx, e);
 			}
 		});
 
@@ -53,9 +55,7 @@ function go(config) {
 				ctx.response.type='json';
 				ctx.response.body = res;
 			} catch (e) {
-				ctx.response.status = 500;
-				ctx.response.type='json';
-				ctx.response.body = {error: e.stack};
+				respondError(ctx, e);
 			}
 		});
 
@@ -66,9 +66,7 @@ function go(config) {
 				ctx.response.type='json';
 				ctx.response.body = res;
 			} catch (e) {
-				ctx.response.status = 500;
-				ctx.response.type='json';
-				ctx.response.body = {error: e.stack};
+				respondError(ctx, e);
 			}
 		});
 
@@ -83,9 +81,7 @@ function go(config) {
 				ctx.response.type='json';
 				ctx.response.body = res;
 			} catch (e) {
-				ctx.response.status = 500;
-				ctx.response.type='json';
-				ctx.response.body = {error: e.stack};
+				respondError(ctx, e);
 			}
 		});
 
@@ -99,9 +95,7 @@ function go(config) {
 				ctx.response.type='json';
 				ctx.response.body = res;
 			} catch (e) {
-				ctx.response.status = 500;
-				ctx.response.type='json';
-				ctx.response.body = {error: e.stack};
+				respondError(ctx, e);
 			}
 		});
 

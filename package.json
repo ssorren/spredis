@@ -34,7 +34,6 @@
     "moment": "^2.19.3",
     "node-snowball": "^0.2.0",
     "redlock": "^3.1.0",
-    "snappy": "^6.0.1",
     "stopwords-iso": "^0.4.0",
     "stream-combiner": "^0.2.2",
     "through": "^2.3.8",
