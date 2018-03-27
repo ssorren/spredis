@@ -3,6 +3,8 @@
 #include <pthread.h>
 
 // KV_INIT(SPScoreCont);
+#define SORTINTERVAL 30;
+#define QUICKSORTINTERVAL 2;
 
 void *SPSortQApplyThread(void *x_void_ptr);
 
@@ -56,7 +58,7 @@ void SpredisDQSort(SPScoreCont *cont) {
 }
 
 void *SPSortQApplyThread(void *x_void_ptr) {
-	int sleepSeconds = 10;
+	int sleepSeconds = SORTINTERVAL;
 	while (sleepSeconds) {
 		sleep(sleepSeconds);
 		SP_WAIT_WLOCK(SPRESORTQ->lock);
@@ -66,8 +68,8 @@ void *SPSortQApplyThread(void *x_void_ptr) {
 			if (pthread_rwlock_trywrlock(&SPRESORTQ->resorting->mutex)) {
 				kv_push(SPScoreCont*, SPRESORTQ->q, SPRESORTQ->resorting);
 				SPRESORTQ->resorting = NULL;
-				// we missed a sort because of a write lock, let's onl sleep a couple of seconds so we can catch up
-				sleepSeconds = 2;
+				// we missed a sort because of a write lock, let's only sleep a couple of seconds so we can catch up
+				sleepSeconds = QUICKSORTINTERVAL;
 				break;
 			};
 			double newScore = 0;
@@ -85,7 +87,7 @@ void *SPSortQApplyThread(void *x_void_ptr) {
 			SpredisUnProtectMap(SPRESORTQ->resorting);
 			SPRESORTQ->resorting = NULL;
 			// go back to normal speed. wait 10 seconds, let the q build up
-			sleepSeconds = 10;
+			sleepSeconds = SORTINTERVAL;
 		}
 		SP_ULOCK(SPRESORTQ->lock);
 		
