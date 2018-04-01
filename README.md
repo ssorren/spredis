@@ -1,57 +1,53 @@
-# spredis
-Redis based CloudSearch Alternative
+# Spredis (alpha)
+source: [https://github.com/salsorrentino/spredis](https://github.com/salsorrentino/spredis)
 
-Currently in pre-alpha phase. Check back soon for more.
+**What is Spredis?**
+Spredis is Redis based document index fetauring:
 
-Will be looking for collaborators soon.
+ 1. Multi-threaded searching
+ 2. **Real-time indexing**
+ 3. Optimized multi-column sorting
+ 4. Geospatial indexing
+ 5. Reverse geo searches
+ 6. JSON queries
+ 7. Localized text indexing (including stop-words and stemming)
+ 8. Prefix/suffix searching
+ 9. JSON document store
+ 10. Date and Number indexing
+ 11. Literal (text) and Date/Number range facet support
+ 12. Embedded (Node), HTTP or TCP server modes
+ 13. Compound index support (pre-intersected literal and boolean fields)
+ 14. JSON document store (what you put in is what you get out)
+ 15. Document expiration
+ 16. Derived text fields (built from list of literal fields)
+ 17. Derived boolean fields
+ 
+**What Spredis isn't** 
+Spredis is not a relational/document database, and is not intended as replacement for one. Spredis works best when coupled with your current database engine (relational or document). 
 
-## Initial Testing Results
-Inital testing is extremely promising. The test database we're using has about 250k (~744MB of JSON data) complex documents based on a real-world production use case. The memory foortprint in Redis is ~1.3GB (index and document data). Scaling up to millions of documents should just be a function of memory. The test queries include a combination of **free text, literal values, geo radius  and number/date ranges, multi-column sorting and faceted results and distance calculation**. The redis setup for the follwing tests is a single redis node runnning v4.
+**Why Spredis?**
+Spredis was designed as an open-source alternative to products like Amazon's CloudSearch service and to overcome some of their drawbacks. Spredis indexing is real-time. Documents are available for searching immediately after the indexing request. Also, since spredis stores your raw JSON document, there is no need for heavy document transformation when you get the document back. You can store as many un-indexed fields as like, Spredis will just ignore them. 
 
-Here are the results we're curently seeing:
-Running 100 queries concurrently (single client)...
-```
-Ran 100 queries in 162ms (TCP)
-  Average query prep time:            0.45ms (1 max)
-  Average query exec time:            2.75ms (9 max)
-  Average respone serialization time: 1.04ms (3 max)
-  Overhead cost:                      -262ms (-2.62ms/query)
-  Speed (incl. overhead):             617 queries/sec (1.62ms/query)
-  Found (incl. overhead):             4375 records (27006/sec)
-  Returned (incl. overhead):          1825 records (11265/sec)
-```
+**What do I need to run Spredis?** 
+Spredis installations consist of 2 components:
 
-Running 1,000 queries consecutively (single client)...
-```
-Ran 1000 queries in 4829ms (TCP)
-  Average query prep time:            0.476ms (3 max)
-  Average query exec time:            1.712ms (6 max)
-  Average respone serialization time: 0.79ms (4 max)
-  Overhead cost:                      1851ms (1.851ms/query)
-  Speed (incl. overhead):             207 queries/sec (4.829ms/query)
-  Found (incl. overhead):             43750 records (9060/sec)
-  Returned (incl. overhead):          18250 records (3779/sec)
-```
-> query prep time = query parsing and index planning
-> 
-> query exec time = time to run query (redis)
-> 
-> respone serialization time = serializing json document and assigning distance expression values
-> 
-> Overhead cost = network travel time + client code execution time (when running concurrent queries this number may be negative)
-	
-## Planned Server Features
-* Run in embedded mode (instanciate server in your code (node only)
-* Run in TCP server mode (will provide TCP client for node only)
-* Run in HTTP server mode (for non-node clients)
+ 1. A Spredis enabled Redis server (v4.x)
+ 2. A Node application running the [Spredis module](https://www.npmjs.com/package/spredis).
+
+The heart of Spredis is a Redis module written in C. It's responsible for taking in documents an indexing them according to a namespace configuration (JSON). Sitting in front of the Redis server is a Node application responsible for parsing queries and translating requests into Redis/Spredis commands. This allows you to scale components independently and ensure maximum throughput. ***Documentation on setup coming soon.***
+
+## How fast is it?
+Really fast. I need to work on some benchmarking, but in my current project I am frequently running into sub-millisecond response times (excluding network latency between client and server)
+
+***Example configs and queries coming soon.***
 
 ## What's being worked on now
-Here's the list of items that need to be completed to get out of pre-alpha phase
+Here's the list of items that need to be completed to get out of alpha phase
 
 - [x] Prefix/Suffix searching for text and literal fields
 - [x] Smarter indexing of documents (only indexing fields that have changed)
 - [ ] Automatic re-indexing after namespace config change
-- [ ] Implmentation of facets for non-literal (rank based) fields
+- [x] Implmentation of facets for non-literal (rank based) fields
 - [ ] Thorough examples and documentation
 - [x] Finish TCP client (spredis-client)
 - [x] Finish HTTP client
