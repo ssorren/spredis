@@ -232,6 +232,9 @@ int SpredisZLexLinkSet_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **ar
     // }
     result = _SpredisInitSet();
     if (p) {
+        // if (kh_size(p->members->set)) {
+        //     kh_resize(SIDS, result->set, p->members->set->n_buckets);
+        // }
         SPAddAllToSet(result->set, p, (khash_t(SIDS)*)NULL);
     }
     

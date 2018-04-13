@@ -35,6 +35,7 @@
 	        if (kh_contains(SIDS, ___larger, ___id)) kh_put(SIDS, (svar), ___id, &___absent); \
 	    });    \
     } else { \
+    	if ((svar)->n_buckets < (kvar)->members->set->n_buckets) kh_resize(SIDS, (svar), (kvar)->members->set->n_buckets);\
 	    kh_foreach_key( ((kvar)->members->set) ,___id, { \
 	        kh_put(SIDS, (svar), ___id, &___absent); \
 	    }); 	\
