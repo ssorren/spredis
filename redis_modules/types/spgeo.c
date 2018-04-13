@@ -144,19 +144,19 @@ void SpredisZGeoSetFreeCallback(void *value) {
 }
 
 int SPGeoScorePutValue(SPScoreCont *cont, spid_t id, uint16_t pos, double lat, double lon) {
-	SpredisProtectWriteMap(cont);
+	SpredisProtectWriteMap(cont, "SPGeoScorePutValue");
     SPPtrOrD_t val = (SPPtrOrD_t)SPGeoHashEncode(lat, lon);
     SPAddGeoScoreToSet(cont->btree, cont->st, id, (SPPtrOrD_t)val);
-    SpredisUnProtectMap(cont);
+    SpredisUnProtectMap(cont, "SPGeoScorePutValue");
 	return 1;
 }
 
 
 int SPGeoScoreDel(SPScoreCont *cont, spid_t id, double lat, double lon) {
-	SpredisProtectWriteMap(cont);
+	SpredisProtectWriteMap(cont,"SPGeoScoreDel");
     SPPtrOrD_t val = (SPPtrOrD_t)SPGeoHashEncode(lat, lon);
     SPRemGeoScoreFromSet(cont->btree, cont->st, id, (SPPtrOrD_t)val);
-	SpredisUnProtectMap(cont);
+	SpredisUnProtectMap(cont,"SPGeoScoreDel");
 	return 1;
 }
 
@@ -220,9 +220,9 @@ int SpredisZGeoSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **arg
     }
 
     SPScoreCont *dhash = RedisModule_ModuleTypeGetValue(key);
-    SpredisProtectReadMap(dhash);
+    SpredisProtectReadMap(dhash, "SpredisZGeoSetCard_RedisCommand");
     RedisModule_ReplyWithLongLong(ctx,kb_size(dhash->btree));
-    SpredisUnProtectMap(dhash);
+    SpredisUnProtectMap(dhash, "SpredisZGeoSetCard_RedisCommand");
     // RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }
@@ -334,7 +334,7 @@ int SpredisZGeoSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **ar
         return REDISMODULE_OK;
     }
     SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
-    SpredisProtectReadMap(cont);
+    SpredisProtectReadMap(cont, "SpredisZGeoSetScore_RedisCommand");
  //    SPScore *score;
  //    spid_t id = TOINTKEY(argv[2]);
  //    khint_t k = kh_get(SCORE, cont->set, id);
@@ -349,6 +349,6 @@ int SpredisZGeoSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **ar
 		RedisModule_ReplyWithNull(ctx);
 	// }
     // RedisModule_CloseKey(key);
-    SpredisUnProtectMap(cont);
+    SpredisUnProtectMap(cont, "SpredisZGeoSetScore_RedisCommand");
     return REDISMODULE_OK;
 }

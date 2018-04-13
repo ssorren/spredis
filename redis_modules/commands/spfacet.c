@@ -123,7 +123,7 @@ void SPThreadedFacet(void *arg) {
 	
 	for (int i = 0; i < targ->facetCount; ++i)
 	{
-		SpredisProtectReadMap(facets[i]->col);
+		SpredisProtectReadMap(facets[i]->col, "SPThreadedFacet");
 	}
 	int keyI;
 	int facetCount = targ->facetCount;
@@ -167,7 +167,7 @@ void SPThreadedFacet(void *arg) {
 	}
 	for (int i = 0; i < targ->facetCount; ++i)
 	{
-		SpredisUnProtectMap(facets[i]->col);
+		SpredisUnProtectMap(facets[i]->col, "SPThreadedFacet");
 	}
 	SpedisPrepareFacetResult(facets, targ->facetCount);
 	RedisModule_UnblockClient(targ->bc, targ);

@@ -65,18 +65,20 @@ void *SPSortQApplyThread(void *x_void_ptr) {
 		while (kv_size(SPRESORTQ->q)) {
 			SPRESORTQ->resorting = kv_pop(SPRESORTQ->q);
 			if (SPRESORTQ->resorting == NULL) continue;
-			if (pthread_rwlock_trywrlock(&SPRESORTQ->resorting->mutex)) {
-				kv_push(SPScoreCont*, SPRESORTQ->q, SPRESORTQ->resorting);
-				SPRESORTQ->resorting = NULL;
-				// we missed a sort because of a write lock, let's only sleep a couple of seconds so we can catch up
-				sleepSeconds = QUICKSORTINTERVAL;
-				break;
-			};
+			SpredisProtectWriteMap(SPRESORTQ->resorting, "SPSortQApplyThread");
+			// if (SpredisProtectWriteMap(&SPRESORTQ->resorting, "SPSortQApplyThread")) {
+			// 	kv_push(SPScoreCont*, SPRESORTQ->q, SPRESORTQ->resorting);
+			// 	SPRESORTQ->resorting = NULL;
+			// 	// we missed a sort because of a write lock, let's only sleep a couple of seconds so we can catch up
+			// 	sleepSeconds = QUICKSORTINTERVAL;
+			// 	break;
+			// };
 			double newScore = 0;
 		    SPScoreSetKey *skey;
 		    kbitr_t itr;
 		    // loop through and bump the score by one for each entry
 		    kb_itr_first(LEXSET, SPRESORTQ->resorting->btree, &itr);
+		    // printf("Sorting...\n");
 		    while (kb_itr_valid(&itr)) {
 		        skey = &kb_itr_key(SPScoreSetKey, &itr);
 		        if (skey != NULL && skey->members != NULL) {
@@ -84,7 +86,7 @@ void *SPSortQApplyThread(void *x_void_ptr) {
 		        }
 				kb_itr_next(LEXSET, SPRESORTQ->resorting->btree, &itr);
 		    }
-			SpredisUnProtectMap(SPRESORTQ->resorting);
+			SpredisUnProtectMap(SPRESORTQ->resorting, "SPSortQApplyThread");
 			SPRESORTQ->resorting = NULL;
 			// go back to normal speed. wait 10 seconds, let the q build up
 			sleepSeconds = SORTINTERVAL;

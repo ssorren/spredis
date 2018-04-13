@@ -31,10 +31,10 @@ void *SpredisExpRslvrRDBLoad(RedisModuleIO *io, int encver) {
 
 void _SpredisDestroyExpRslvr(void *value) {
     SpExpResolverCont *er = value;
-    SpredisProtectWriteMap(er);
+    SpredisProtectWriteMap(er, "_SpredisDestroyExpRslvr");
     if (er->keyName) RedisModule_Free(er->keyName);
 	if (er->input) RedisModule_Free(er->input);
-	SpredisUnProtectMap(er);
+	SpredisUnProtectMap(er, "_SpredisDestroyExpRslvr");
 	pthread_rwlock_destroy(&er->mutex);
 	RedisModule_Free(er);
 }

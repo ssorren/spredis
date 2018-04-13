@@ -31,9 +31,9 @@ void * _SpredisInitWithLinkedSet(khash_t(SIDS) *s, pthread_rwlock_t mutex) {
 void _SpredisDestroySet(void *value) {
     SpredisSetCont *dhash = value;
     if (!dhash->linkedSet) {
-        SpredisProtectWriteMap(dhash);
+        SpredisProtectWriteMap(dhash, "_SpredisDestroySet");
         if (dhash->set != NULL) kh_destroy(SIDS, dhash->set);
-        SpredisUnProtectMap(dhash);
+        SpredisUnProtectMap(dhash, "_SpredisDestroySet");
         pthread_rwlock_destroy(&dhash->mutex);    
     }
     // pthread_rwlock_destroy(&dhash->bigLock);
@@ -129,7 +129,7 @@ SpredisSetCont *SpredisSIntersect(SpredisSetCont **cas, int count) {
     size_t j;
     j = count;
     while (j) {
-        SpredisProtectReadMap(cas[--j]);
+        SpredisProtectReadMap(cas[--j], "SpredisSIntersect");
     }
     SpredisSpredisSetContSort(count, cas, NULL);
     spid_t id;
@@ -157,7 +157,7 @@ SpredisSetCont *SpredisSIntersect(SpredisSetCont **cas, int count) {
     });
     j = count;
     while (j) {
-        SpredisUnProtectMap(cas[--j]);
+        SpredisUnProtectMap(cas[--j], "SpredisSIntersect");
     }
     // printf("Found %u\n", kh_size(product));
     // if (kh_size(product) == 0) {
@@ -176,7 +176,7 @@ SpredisSetCont *SpredisSDifference(SpredisSetCont **cas, int count) {
     int j = count;
     // long long startTimer = RedisModule_Milliseconds(); 
     while (j) {
-        SpredisProtectReadMap(cas[--j]);
+        SpredisProtectReadMap(cas[--j], "SpredisSDifference");
         // printf("set size = %lu\n", kh_size(cas[j]->set));
     }
     if (count > 2) {
@@ -211,7 +211,7 @@ SpredisSetCont *SpredisSDifference(SpredisSetCont **cas, int count) {
     
     j = count;
     while (j) {
-        SpredisUnProtectMap(cas[--j]);
+        SpredisUnProtectMap(cas[--j], "SpredisSDifference");
     }
     // if (kh_size(product) == 0) {
     //  _SpredisDestroySet(res);
@@ -231,12 +231,12 @@ SpredisSetCont *SpredisSUnion(SpredisSetCont **cas, int count) {
     while (count) {
         a = cas[--count];
         if (a != NULL) {
-            SpredisProtectReadMap(a);
+            SpredisProtectReadMap(a, "SpredisSUnion");
             set = a->set;
             kh_foreach_key(set, id, {
                 kh_put(SIDS,product, id, &absent);
             });
-            SpredisUnProtectMap(a);
+            SpredisUnProtectMap(a, "SpredisSUnion");
         }
     }
     // if (kh_size(product) == 0) {
@@ -252,22 +252,22 @@ SpredisSetCont *SpredisSAddAll(SpredisSetCont **cas, int count) {
     khash_t(SIDS) *set;
 
     SpredisSetCont *res = cas[0];
-    SpredisProtectWriteMap(res);
+    SpredisProtectWriteMap(res, "SpredisSAddAll");
     khash_t(SIDS) *product = res->set;
     int absent;
     spid_t id;
-    while (count > 0) {
+    while (count > 1) {
         a = cas[--count];
         if (a != NULL) {
-            SpredisProtectReadMap(a);
+            SpredisProtectReadMap(a, "SpredisSAddAll");
             set = a->set;
             kh_foreach_key(set, id, {
                 kh_put(SIDS,product, id, &absent);
             });
-            SpredisUnProtectMap(a);
+            SpredisUnProtectMap(a, "SpredisSAddAll");
         }
     }
-    SpredisUnProtectMap(res);
+    SpredisUnProtectMap(res, "SpredisSAddAll");
     // if (kh_size(product) == 0) {
     //     _SpredisDestroySet(res);
     //     return NULL;
@@ -275,19 +275,20 @@ SpredisSetCont *SpredisSAddAll(SpredisSetCont **cas, int count) {
     return res;
 }
 
-int SpredisSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    RedisModule_AutoMemory(ctx);
-    if (argc < 3) return RedisModule_WrongArity(ctx);
+int SpredisSetAdd_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    
     int argOffset = 2;
     // if ( ((argc - argOffset) % 2) != 0 ) return RedisModule_WrongArity(ctx);
     int keyCount = (argc - argOffset);
     int setCount = 0;
     int argIndex = argOffset;
     // printf("%s\n", "WTF1");
+    SPLockContext(ctx);
     RedisModuleKey *key = RedisModule_OpenKey(ctx,argv[1],
             REDISMODULE_WRITE);
     int keyType;
     if (HASH_NOT_EMPTY_AND_WRONGTYPE(key, &keyType, SPSETTYPE) != 0) {
+        SPUnlockContext(ctx);
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);   
     }
     // printf("%s\n", "WTF2");
@@ -298,10 +299,11 @@ int SpredisSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     } else {
         dhash = RedisModule_ModuleTypeGetValue(key);
     }
+    SPUnlockContext(ctx);
     // RedisModule_CloseKey(key);
     // printf("%s\n", "WTF3");
     // SpredisDHash *d;
-    SpredisProtectWriteMap(dhash);
+    SpredisProtectWriteMap(dhash, "SpredisSetAdd_RedisCommand");
     for (int i = 0; i < keyCount; ++i)
     {
         /* code */
@@ -310,38 +312,50 @@ int SpredisSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
         kh_put(SIDS, dhash->set, id, &absent);
         setCount += absent;
     }
-    SpredisUnProtectMap(dhash);
+    SpredisUnProtectMap(dhash, "SpredisSetAdd_RedisCommand");
    // printf("%s\n", "WTF4");
     
     RedisModule_ReplyWithLongLong(ctx, setCount);
+    SPLockContext(ctx);
     RedisModule_ReplicateVerbatim(ctx);
+    SPUnlockContext(ctx);
     // printf("%s\n", "WTF5");
     return REDISMODULE_OK;
 }
 
-int SpredisSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+int SpredisSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    if (argc < 3) return RedisModule_WrongArity(ctx);
+    return SPThreadedWork(ctx, argv, argc, SpredisSetAdd_RedisCommandT);
+}
+int SpredisSetCard_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // printf("Getting %d\n", TOINTKEY(argv[2]));
-    RedisModule_AutoMemory(ctx);
-    if (argc != 2) return RedisModule_WrongArity(ctx);
+    // RedisModule_AutoMemory(ctx);
+    SPLockContext(ctx);
     RedisModuleKey *key = RedisModule_OpenKey(ctx,argv[1], REDISMODULE_READ);
     int keyType;
     if (HASH_NOT_EMPTY_AND_WRONGTYPE(key, &keyType, SPSETTYPE) != 0) {
+        SPUnlockContext(ctx);
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);   
     }
     if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
+        SPUnlockContext(ctx);
         RedisModule_ReplyWithLongLong(ctx, 0);
         // RedisModule_CloseKey(key);
         return REDISMODULE_OK;
     }
 
     SpredisSetCont *dhash = RedisModule_ModuleTypeGetValue(key);
-    SpredisProtectReadMap(dhash);
+    SPUnlockContext(ctx);
+    SpredisProtectReadMap(dhash, "SpredisSetCard_RedisCommand");
     RedisModule_ReplyWithLongLong(ctx,kh_size(dhash->set));
-    SpredisUnProtectMap(dhash);
+    SpredisUnProtectMap(dhash, "SpredisSetCard_RedisCommand");
     // RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }
-
+int SpredisSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    if (argc != 2) return RedisModule_WrongArity(ctx);
+    return SPThreadedWork(ctx, argv, argc, SpredisSetCard_RedisCommandT);
+}
 int SpredisSetMember_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // printf("Getting %d\n", TOINTKEY(argv[2]));
     RedisModule_AutoMemory(ctx);
@@ -360,14 +374,14 @@ int SpredisSetMember_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
     SpredisSetCont *dhash = RedisModule_ModuleTypeGetValue(key);
     spid_t id = TOINTID(argv[2],16);
 
-    SpredisProtectReadMap(dhash);
+    SpredisProtectReadMap(dhash, "SpredisSetMember_RedisCommand");
     // khint_t k = kh_get(SIDS, dhash->set , id);
     if (kh_contains(SIDS, dhash->set, id)) {
         RedisModule_ReplyWithLongLong(ctx,1);
     } else {
         RedisModule_ReplyWithLongLong(ctx,0);
     }
-    SpredisUnProtectMap(dhash);
+    SpredisUnProtectMap(dhash, "SpredisSetMember_RedisCommand");
 
     // RedisModule_CloseKey(key);
     return REDISMODULE_OK;
@@ -391,7 +405,7 @@ int SpredisSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
 
     SpredisSetCont *dhash = RedisModule_ModuleTypeGetValue(key);
     spid_t id = TOINTID(argv[2],16);
-    SpredisProtectWriteMap(dhash);
+    SpredisProtectWriteMap(dhash, "SpredisSetRem_RedisCommand");
     khint_t k = kh_get(SIDS, dhash->set , id);
     if (kh_exist(dhash->set, k)) {
         kh_del(SIDS, dhash->set, k);    
@@ -399,7 +413,7 @@ int SpredisSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     } else {
         RedisModule_ReplyWithLongLong(ctx,0);
     }
-    SpredisUnProtectMap(dhash);
+    SpredisUnProtectMap(dhash, "SpredisSetRem_RedisCommand");
 
     if (kh_size(dhash->set) == 0) {
         RedisModule_DeleteKey(key);

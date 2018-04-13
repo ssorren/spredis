@@ -29,6 +29,11 @@
 #define uthash_free(ptr,sz) RedisModule_Free(ptr)     /* free fcn                        */
 #include "lib/uthash.h"
 
+pthread_t SPMainThread();
+int SP_WRITE_LOCK();
+int SP_READ_LOCK();
+int SP_UNLOCK();
+
 #define kcalloc(N,Z) RedisModule_Calloc(N,Z)
 #define kmalloc(Z) RedisModule_Alloc(Z)
 #define krealloc(P,Z) RedisModule_Realloc(P,Z)

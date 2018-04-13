@@ -137,80 +137,19 @@ void DoFormula(void *form, long count, int tid) {
 
 }
 
-
-int SpredisEXPR_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    // printf("Getting %d\n", TOINTKEY(argv[2]));
-    RedisModule_AutoMemory(ctx);
-    
-
-   
-    // kexpr_t *ke;
-    // int err;
-
-    // const char * formula = "(100 - distance) * weight";
-
-    // ke = ke_parse("(100 - distance) * weight", &err);   // parse expression
-    // // ke_set_real_func1(ke, "myexp", exp);     // define a math function
-
-    // ke_set_real(ke, "distance", 25.786);
-    // ke_set_real(ke, "weight", 0.1);
-    
-    // printf("score: %g\n", ke_eval_real(ke, &err));
-
-
-    // ke_set_real(ke, "distance", 45.786);
-    // ke_set_real(ke, "weight", 0.1);
-    
-    // printf("score: %g\n", ke_eval_real(ke, &err));
-
-
-    // ke_set_real(ke, "distance", 67.786);
-    // ke_set_real(ke, "weight", 0.1);
-    
-    // printf("score: %g\n", ke_eval_real(ke, &err));
-    //                         // deallocate
-   
-    
-
-    // long long count = 0;
-    // long long  num_threads = 2;
-    // RedisModule_StringToLongLong(argv[1], &count);
-    // RedisModule_StringToLongLong(argv[2], &num_threads);
-    // ke_destroy(ke);  
-
-    // long long startTimer = RedisModule_Milliseconds();
-
-    // expr_cont cont = {.formula = formula, count / num_threads};
-    // kt_for((int)num_threads, DoFormula, &cont, (int)num_threads);
-
-    // // for (long long i = 0; i < count; ++i)
-    // // {
-    // //     /* code */
-    // //     ke_set_real(ke, "distance", 25.786);
-    // //     ke_set_real(ke, "weight", 0.1);
-    // //     ke_eval_real(ke, &err);
-    // // }
-
-    // // RedisModule_ReplyWithSimpleString(ctx, "OK");
-    // // RedisModule_ReplyWithLongLong(ctx, RedisModule_CallReplyLength(reply));
-    // RedisModule_ReplyWithLongLong(ctx, RedisModule_Milliseconds() - startTimer);
-    
-
-
-   
-    RedisModule_ReplyWithDouble(ctx, 0);
-
-    
-    return REDISMODULE_OK;
-}
-
 int SpredisSetRedisKeyValueType(RedisModuleKey *key, int type, void *value) {
     // printf("trying to set %d\n", type);
     return RedisModule_ModuleTypeSetValue(key, SPREDISMODULE_TYPES[type],value);
 }
 
 static threadpool SP_GENERIC_WORKER_POOL;
+static pthread_mutex_t SP_GRW_LOCK;
+static pthread_mutexattr_t SP_GRW_attr;
 int SPDoWorkInThreadPool(void *func, void *arg) {
+    
+    // pthread_t tid;
+    // pthread_create(&tid,NULL,func,arg);
+    // return pthread_detach(tid);
     return thpool_add_work(SP_GENERIC_WORKER_POOL, func, arg);
 }
 
@@ -220,10 +159,35 @@ void SPDoWorkInParallel(void (**func)(void*), void **arg, int jobCount) {
     sp_runjobs(SP_PQ_POOL, func, arg, jobCount);
 }
 
+int SP_WRITE_LOCK() {
+    // if (pthread_self() == SPMainThread()) printf("Writelock from main thread: %s\n", name);
+    // if (write_owner == pthread_self()) printf("Double locking?\n");
+    return pthread_mutex_lock(&SP_GRW_LOCK);
+    // write_owner = pthread_self();
+    // if (res) printf("WTF!!!!1\n");
+    // return 0;
+}
+
+int SP_READ_LOCK() {
+    // return SP_WRITE_LOCK();
+    // if (pthread_self() == SPMainThread()) printf("Readlock from main thread: %s\n", name);
+    return pthread_mutex_lock(&SP_GRW_LOCK);
+
+    // if (res) printf("WTF!!!!2\n");
+    // return 0;
+}
+
+int SP_UNLOCK() {
+    return pthread_mutex_unlock(&SP_GRW_LOCK);
+}
+// pthread_rwlock_timedwrlock
+// #define SpredisProtectWriteMap(map,name) {printf("locking: %s\n", name);  pthread_rwlock_wrlock(&map->mutex); printf("locked: %s\n", name);}
+// #define SpredisProtectWriteMap(map,name) {printf("locking: %s\n", name); struct timespec ___ts = {.tv_sec=0,.tv_nsec=2000};  pthread_rwlock_timedwrlock(&map->mutex, &___ts); printf("locked: %s\n", name);}
 
 typedef struct {
     RedisModuleBlockedClient *bc;
     RedisModuleString **argv;
+    RedisModuleCtx *ctx;
     int argc;
     int reply;
     int (*command)(RedisModuleCtx*, RedisModuleString**, int);
@@ -239,6 +203,8 @@ void SPThreadedReplyFree(void *arg)
 {
     SPThreadArg *targ = arg;
     // printf("Freeing thread arg\n");
+    RedisModule_Free(targ->argv);
+    RedisModule_FreeThreadSafeContext(targ->ctx);
     RedisModule_Free(targ);
 }
 
@@ -246,13 +212,11 @@ void SPThreadedReplyFree(void *arg)
 void SPThreadedDoWork(void *arg)
 {
     SPThreadArg *targ = arg;
-    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(targ->bc);
-    SPLockContext(ctx);
-    RedisModule_AutoMemory(ctx);
-    SPUnlockContext(ctx);
-    targ->reply = targ->command(ctx, targ->argv, targ->argc);
+    
+    // SPUnlockContext(ctx);
+    targ->reply = targ->command(targ->ctx, targ->argv, targ->argc);
     RedisModule_UnblockClient(targ->bc, targ);
-    RedisModule_FreeThreadSafeContext(ctx);
+    
 }
 
 int SPThreadedWork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int (*command)(RedisModuleCtx*, RedisModuleString**, int)) {
@@ -264,9 +228,17 @@ int SPThreadedWork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int 
     // }
     SPThreadArg *targ = RedisModule_Alloc(sizeof(SPThreadArg));
     targ->bc = RedisModule_BlockClient(ctx, SPThreadedReply /*reply*/, SPThreadedReply /*timeout*/, SPThreadedReplyFree /*free*/ ,0);
-    targ->argv = argv;
+    // targ->argv = argv;
+    targ->argv = RedisModule_Calloc(argc, sizeof(RedisModuleString*));
     targ->argc = argc;
     targ->command = command;
+    targ->ctx = RedisModule_GetThreadSafeContext(targ->bc);
+    RedisModule_AutoMemory(targ->ctx);
+    // we need to copy the args to the new context in case they get released before the thread is finished
+    for (int i = 0; i < argc; ++i)
+    {
+        targ->argv[i] = RedisModule_CreateStringFromString(targ->ctx, argv[i]);
+    }
     if (SPDoWorkInThreadPool(SPThreadedDoWork, targ) != 0) {
         RedisModule_AbortBlock(targ->bc);
         SPThreadedReplyFree(targ);
@@ -296,7 +268,11 @@ void SpredisWarn(RedisModuleCtx *ctx, const char *fmt,...) {
     RedisModule_Log(ctx, "warning", fmt, ap);
     va_end(ap);   
 }
+static pthread_t SP_MainThread;
 
+pthread_t SPMainThread() {
+    return SP_MainThread;
+}
 int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // SPLazyPool = thpool_init(1);
 
@@ -310,7 +286,12 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     SpredisFacetInit();
     SPStoreRangeInit();
     // SPSetCommandInit();
+    SP_MainThread = pthread_self();
     SP_GENERIC_WORKER_POOL = thpool_init(SP_GEN_TPOOL_SIZE);
+    
+    pthread_mutexattr_init(&SP_GRW_attr);
+    pthread_mutexattr_settype(&SP_GRW_attr, PTHREAD_MUTEX_ERRORCHECK);
+    pthread_mutex_init ( &SP_GRW_LOCK, &SP_GRW_attr);
     SP_PQ_POOL = sp_pq_init(SP_PQ_POOL_SIZE, SP_PQ_TCOUNT_SIZE);
 
     SpredisLog(ctx, "SPREDIS_MEMORIES initialized (bleep bleep, blorp blorp, pew pew)\n");
@@ -321,10 +302,6 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     // }
 
     if (SpredisInitDocumentCommands(ctx) != REDISMODULE_OK) return REDISMODULE_ERR;
-
-    if (RedisModule_CreateCommand(ctx,"spredis.exprtest",
-        SpredisEXPR_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
 
     /* support commands */
     if (RedisModule_CreateCommand(ctx,"spredis.storerangebyscore",

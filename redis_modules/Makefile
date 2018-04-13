@@ -1,4 +1,4 @@
-DEBUGFLAGS = -g -ggdb -O3
+DEBUGFLAGS = -g -ggdb -O2
 ifeq ($(DEBUG), 1)
 	DEBUGFLAGS = -g -ggdb -O0
 endif
@@ -37,6 +37,8 @@ DEPS = 	$(TYPEDIR)/sptempresult.o $(TYPEDIR)/spset.o $(TYPEDIR)/spscore.o $(TYPE
 		$(TYPEDIR)/spexpresolver.o $(TYPEDIR)/spgeo.o $(TYPEDIR)/spdocument.o\
 		$(COMDIR)/spfacet.o $(COMDIR)/spfacetrange.o $(COMDIR)/spmcsort.o $(COMDIR)/sprangestore.o\
 		$(LIBDIR)/spsortapplicator.o $(LIBDIR)/thpool.o $(LIBDIR)/sp_parallelqueue.o $(LIBDIR)/kexpr.o $(LIBDIR)/geohash.o\
+		$(LIBDIR)/lz4.o 
+		# $(LIBDIR)/threadpool.o
 
 export
 

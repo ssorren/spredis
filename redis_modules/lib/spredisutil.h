@@ -3,6 +3,8 @@
 
 #include <math.h>
 #include <unistd.h>
+#include <time.h>
+#include <errno.h>
 // #define R 6371
 typedef struct _SPLatLong {
     double lat;
@@ -34,9 +36,20 @@ static inline double  SPGetDist(double alat, double alon, double blat, double bl
 }
 
 
-#define SpredisProtectWriteMap(map) {while (pthread_rwlock_trywrlock(&map->mutex)) { usleep(75); }}
-#define SpredisProtectReadMap(map) pthread_rwlock_rdlock(&map->mutex)
-#define SpredisUnProtectMap(map) pthread_rwlock_unlock(&map->mutex)
+// #define SpredisProtectWriteMap(map, name) { \
+//     while (pthread_rwlock_trywrlock(&map->mutex)) {usleep(10);} \
+// }
+// #define SpredisProtectWriteMap(map, name) {printf("Wgrabbing: %s\n", name);pthread_rwlock_wrlock(&map->mutex);printf("Wgrabbed: %s\n", name);}
+// pthread_rwlock_timedwrlock
+#define SpredisProtectWriteMap(map,name) pthread_rwlock_wrlock(&map->mutex)
+// #define SpredisProtectWriteMap(map,name) {printf("locking: %s\n", name); struct timespec ___ts = {.tv_sec=0,.tv_nsec=2000};  pthread_rwlock_timedwrlock(&map->mutex, &___ts); printf("locked: %s\n", name);}
+
+// #define SpredisProtectReadMap(map, name) {printf("Rgrabbing: %s\n", name);pthread_rwlock_rdlock(&map->mutex);printf("Rgrabbed: %s\n", name);}
+// #define SpredisProtectReadMap(map, name) {SP_WRITE_LOCK();pthread_rwlock_rdlock(&map->mutex); SP_UNLOCK();}
+// #define SpredisProtectReadMap(map, name) pthread_rwlock_rdlock(&map->mutex)
+#define SpredisProtectReadMap(map, name) pthread_rwlock_rdlock(&map->mutex)
+// #define SpredisUnProtectMap(map, name) {printf("Unlocked: %s\n", name);pthread_rwlock_unlock(&map->mutex);}
+#define SpredisUnProtectMap(map, name) pthread_rwlock_unlock(&map->mutex)
 
 typedef struct {
     void *left, *right;

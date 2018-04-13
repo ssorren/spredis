@@ -115,12 +115,7 @@ void SPThreadedSort(SPThreadedSortArg *targ) {
     SpredisSortData **datas = targ->datas;
     SpredisSortData *d;
     uint64_t id;
-    // int j = mcd->colCount;
-    // SpredisProtectReadMap(targ->set);
-    // while (j) {
-    //     SpredisProtectReadMap(mcd->cols[--j]);
-    // }
-    // khint_t kk;
+
     
     kh_foreach_key(set, id, {
         d = RedisModule_Calloc(1, sizeof(SpredisSortData));
@@ -162,13 +157,6 @@ void SPThreadedSort(SPThreadedSortArg *targ) {
     
         SpredisSpredisSortDataSort(targ->count, datas, mcd);    
     }
-    
-    // j = mcd->colCount;
-    // while (j) {
-    //     SpredisUnProtectMap(mcd->cols[--j]);
-    // }
-    // SpredisUnProtectMap(targ->set);
-    // RedisModule_UnblockClient(targ->bc,targ);
 }
 
 
@@ -191,25 +179,17 @@ int SpredisIntroSortSset(RedisModuleCtx *ctx, RedisModuleKey *zkey, SpredisSetCo
     targ->datas = tempRes->data;
     targ->mcd = mcd;
 
-    SpredisProtectReadMap(cont);
+    SpredisProtectReadMap(cont, "SpredisIntroSortSset");
     int j = mcd->colCount;
     while (j) {
-        SpredisProtectReadMap(mcd->cols[--j]);
+        SpredisProtectReadMap(mcd->cols[--j], "SpredisIntroSortSset");
     }
     SPThreadedSort(targ);
-    
-    // SP_TWORK(SPThreadedSort, targ, {
-    //     printf("could not create thread!!, trying to run on main thread\n");
-    //     RedisModule_AbortBlock(bc);
-    //     SPThreadedSort((void *)targ);
-    //     RedisModule_ReplyWithLongLong(ctx,count);
-    //     SPThreadedSort_FreePriv((void *)targ);
-    // });
     j = mcd->colCount;
     while (j) {
-        SpredisUnProtectMap(mcd->cols[--j]);
+        SpredisUnProtectMap(mcd->cols[--j], "SpredisIntroSortSset");
     }
-    SpredisUnProtectMap(cont);
+    SpredisUnProtectMap(cont, "SpredisIntroSortSset");
     
     SPThreadedSort_FreeArg(targ);
     RedisModule_ReplyWithSimpleString(ctx,"OK");
@@ -341,7 +321,7 @@ int SpredisExprResolve_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **ar
 
     SpredisTempResult *res = RedisModule_ModuleTypeGetValue(resultKey);
     SpExpResolverCont *exp = RedisModule_ModuleTypeGetValue(exprKey);
-    SpredisProtectReadMap(exp);
+    SpredisProtectReadMap(exp, "SpredisExprResolve_RedisCommandT");
     SPUnlockContext(ctx);
 
     khash_t(SORTTRACK) *set = exp->set;
@@ -363,7 +343,7 @@ int SpredisExprResolve_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **ar
         finalCount++;
         start++;
     }
-    SpredisUnProtectMap(exp);
+    SpredisUnProtectMap(exp, "SpredisExprResolve_RedisCommandT");
     RedisModule_ReplySetArrayLength(ctx, finalCount);
     return REDISMODULE_OK;
 }

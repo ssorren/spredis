@@ -374,7 +374,7 @@ static void* thread_do(struct thread* thread_p){
 				pthread_cond_signal(&thpool_p->threads_all_idle);
 			}
 			pthread_mutex_unlock(&thpool_p->thcount_lock);
-
+			
 		}
 	}
 	pthread_mutex_lock(&thpool_p->thcount_lock);

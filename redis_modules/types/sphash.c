@@ -38,7 +38,7 @@ int SPHashPutValue(SPHashCont *cont, spid_t id, uint16_t pos, SPPtrOrD_t val) {
 void SpredisHashRDBSave(RedisModuleIO *io, void *ptr) {
 	if (ptr == NULL) return;
 	SPHashCont *cont = ptr;
-	SpredisProtectReadMap(cont);
+	SpredisProtectReadMap(cont,"SpredisHashRDBSave");
 	SPHashValue *hv = NULL;
 	RedisModule_SaveUnsigned(io, kh_size(cont->set));
 	RedisModule_SaveUnsigned(io, cont->valueType);
@@ -60,13 +60,13 @@ void SpredisHashRDBSave(RedisModuleIO *io, void *ptr) {
 			}
 		});
     });
-	SpredisUnProtectMap(cont);
+	SpredisUnProtectMap(cont,"SpredisHashRDBSave");
 }
 
 void SpredisHashRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value) {
 	if (value == NULL) return;
 	SPHashCont *cont = value;
-	SpredisProtectReadMap(cont);
+	SpredisProtectReadMap(cont, "SpredisHashRewriteFunc");
 	SPHashValue *hv = NULL;
 	uint16_t pos = 0;
 	SPPtrOrD_t val;
@@ -85,7 +85,7 @@ void SpredisHashRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *va
 			}
 		});
     });
-	SpredisUnProtectMap(cont);
+	SpredisUnProtectMap(cont, "SpredisHashRewriteFunc");
 }
 
 void *SpredisHashRDBLoad(RedisModuleIO *io, int encver) {
@@ -124,7 +124,7 @@ void SpredisHashDestroy(void *value) {
 	SPPtrOrD_t t;
 	SPHashValue *hv;
 	uint16_t pos = 0;
-	SpredisProtectWriteMap(cont);
+	SpredisProtectWriteMap(cont, "SpredisHashDestroy");
 	kh_foreach_value(cont->set, hv, {
 		if (hv->type == SPHashStringType) {
 			kv_foreach_value(hv->used, hv->values, &t, &pos, {
@@ -136,7 +136,7 @@ void SpredisHashDestroy(void *value) {
 		RedisModule_Free(hv);
     });
     kh_destroy(HASH, cont->set);
-    SpredisUnProtectMap(cont);
+    SpredisUnProtectMap(cont, "SpredisHashDestroy");
     pthread_rwlock_destroy(&cont->mutex);
     RedisModule_Free(cont);
 }
@@ -206,7 +206,7 @@ int SpredisHashSet(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, SPHa
     	}
     }
     if (!errorCondition) {
-        SpredisProtectWriteMap(cont);
+        SpredisProtectWriteMap(cont, "SpredisHashSet");
         for (int i = 0; i < keyCount; ++i)
         {
         	spid_t id = kv_A(ids, i);
@@ -217,7 +217,7 @@ int SpredisHashSet(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, SPHa
         	// }
         	
         }
-        SpredisUnProtectMap(cont);
+        SpredisUnProtectMap(cont, "SpredisHashSet");
     }
     kv_destroy(ids);
     kv_destroy(poss);
@@ -292,7 +292,7 @@ int SpredisHashDel_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, i
     	kv_push(spid_t, ids, TOINTKEY(argv[i++]));
     	kv_push(uint16_t, poss, (uint16_t)TOINTKEY10(argv[i++]));
     }
-    SpredisProtectWriteMap(cont);
+    SpredisProtectWriteMap(cont, "SpredisHashDel_RedisCommand");
     spid_t id;
     uint16_t pos;
     khint_t k;
@@ -314,7 +314,7 @@ int SpredisHashDel_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, i
 	    	}
     	}
     }
-    SpredisUnProtectMap(cont);
+    SpredisUnProtectMap(cont, "SpredisHashDel_RedisCommand");
     if (kh_size(cont->set) == 0) {
         RedisModule_DeleteKey(key);
     }

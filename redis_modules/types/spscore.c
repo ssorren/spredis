@@ -15,6 +15,7 @@ SPScoreCont *SPScoreContInit() {
 	SPScoreCont *cont = RedisModule_Alloc(sizeof(SPScoreCont));
 	// cont->set = kh_init(SCORE);
 	cont->btree = kb_init(SCORESET, SP_DEFAULT_TREE_SIZE);
+    // cont->mutex = {PTHREAD_RWLOCK_INITIALIZER};
 	pthread_rwlock_init ( &cont->mutex, NULL);
     cont->st = kh_init(SORTTRACK);
 	return cont;
@@ -22,7 +23,7 @@ SPScoreCont *SPScoreContInit() {
 
 
 void SPScoreContDestroy(SPScoreCont *cont) {
-	SpredisProtectWriteMap(cont);
+	SpredisProtectWriteMap(cont, "SPScoreContDestroy");
     SPDestroyScoreSet(cont->btree);
 	// kbtree_t(SCORESET)* tree = cont->btree;	
  //    kb_destroy(SCORESET, tree);
@@ -31,7 +32,7 @@ void SPScoreContDestroy(SPScoreCont *cont) {
     // 	RedisModule_Free(score);
     // });
     kh_destroy(SORTTRACK, cont->st);
-    SpredisUnProtectMap(cont);
+    SpredisUnProtectMap(cont, "SPScoreContDestroy");
     pthread_rwlock_destroy(&cont->mutex);
     RedisModule_Free(cont);
 }
@@ -40,9 +41,9 @@ void SPScoreContDestroy(SPScoreCont *cont) {
 
 void SpredisZSetRDBSave(RedisModuleIO *io, void *ptr) {
     SPScoreCont *cont = ptr;
-    SpredisProtectReadMap(cont);
+    SpredisProtectReadMap(cont,"SpredisZSetRDBSave");
     SPWriteScoreSetToRDB(io, cont->btree);
-    SpredisUnProtectMap(cont);
+    SpredisUnProtectMap(cont,"SpredisZSetRDBSave");
 }
 
 
@@ -69,9 +70,9 @@ void *SpredisZSetRDBLoad(RedisModuleIO *io, int encver) {
     }
     
     SPScoreCont *cont = SPScoreContInit();
-    SpredisProtectWriteMap(cont);
+    SpredisProtectWriteMap(cont, "SpredisZSetRDBLoad");
     SPReadScoreSetFromRDB(io, cont->btree, cont->st);
-    SpredisUnProtectMap(cont);
+    SpredisUnProtectMap(cont, "SpredisZSetRDBLoad");
     return cont;
 }
 
@@ -87,18 +88,18 @@ void SpredisZSetFreeCallback(void *value) {
 
 
 int SPScorePutValue(SPScoreCont *cont, spid_t id, double val) {
-	SpredisProtectWriteMap(cont);
+	SpredisProtectWriteMap(cont, "SPScorePutValue");
 
     SPAddScoreToSet(cont->btree, cont->st, id, (SPPtrOrD_t)val);
-    SpredisUnProtectMap(cont);
+    SpredisUnProtectMap(cont, "SPScorePutValue");
 	return 1;
 }
 
 int SPScoreDel(SPScoreCont *cont, spid_t id, double val) {
-	SpredisProtectWriteMap(cont);
+	SpredisProtectWriteMap(cont, "SPScoreDel");
     SPRemScoreFromSet(cont->btree, cont->st, id, (SPPtrOrD_t)val);
 	
-    SpredisUnProtectMap(cont);
+    SpredisUnProtectMap(cont, "SPScoreDel");
 	return 1;
 }
 
@@ -217,7 +218,7 @@ int SpredisZScoreLinkSet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **a
     }
 
     SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
-    SpredisProtectReadMap(cont);
+    SpredisProtectReadMap(cont, "SpredisZScoreLinkSet_RedisCommand");
     SPScoreSetKey *p;
     SPScoreSetKey search = {.value = (SPPtrOrD_t)value};
     SpredisSetCont *result;
@@ -233,7 +234,7 @@ int SpredisZScoreLinkSet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **a
     SpredisSetRedisKeyValueType(store, SPSETTYPE, result);
     // printf("set key %s\n", RedisModule_StringPtrLen(argv[2], NULL));
     RedisModule_ReplyWithLongLong(ctx, kh_size(result->set));
-    SpredisUnProtectMap(cont);
+    SpredisUnProtectMap(cont, "SpredisZScoreLinkSet_RedisCommand");
     return REDISMODULE_OK;
 }
 
@@ -254,9 +255,9 @@ int SpredisZSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, 
     }
 
     SPScoreCont *dhash = RedisModule_ModuleTypeGetValue(key);
-    SpredisProtectReadMap(dhash);
+    SpredisProtectReadMap(dhash, "SpredisZSetCard_RedisCommand");
     RedisModule_ReplyWithLongLong(ctx, kb_size(dhash->btree));
-    SpredisUnProtectMap(dhash);
+    SpredisUnProtectMap(dhash, "SpredisZSetCard_RedisCommand");
     // RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }
@@ -296,11 +297,11 @@ int SpredisZSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, i
     // 	RedisModule_ReplyWithLongLong(ctx,0);
     // }
     // 
-    SpredisProtectReadMap(cont);
+    SpredisProtectReadMap(cont, "SpredisZSetRem_RedisCommand");
     if (kb_size(cont->btree) == 0) {
         RedisModule_DeleteKey(key);
     }
-    SpredisUnProtectMap(cont);
+    SpredisUnProtectMap(cont, "SpredisZSetRem_RedisCommand");
 
     // RedisModule_CloseKey(key);
     // RedisModule_ReplyWithLongLong(ctx, (remRes == MAP_OK) ? 1 : 0);

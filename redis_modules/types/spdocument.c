@@ -1,9 +1,36 @@
 #include "../spredis.h"
+#include "../lib/lz4.h"
 
+#define SP_ACCELERATION_FACTOR 8
 
 spid_t _SPNewRecordId(SPDocContainer *dc) {
     dc->newRecordId++;
     return dc->newRecordId;
+}
+
+static inline void SP_PACK(const char *doc, SPLZWCont *lzw) {
+    if (doc == NULL) return;
+    lzw->oSize = strlen(doc);
+    int cSize;
+    int dstCapacity = LZ4_COMPRESSBOUND(lzw->oSize);
+    if (lzw->packed != NULL) RedisModule_Free(lzw->packed);
+    char *dst = RedisModule_Alloc(sizeof(char) * dstCapacity);
+    cSize = LZ4_compress_fast(doc, dst, lzw->oSize, dstCapacity, SP_ACCELERATION_FACTOR);
+    lzw->packed = RedisModule_Alloc((cSize + 1) * sizeof(char));
+    lzw->packed[cSize] = 0; //null the last char
+    //have to copy to new buffer and destroy the old one otherwise we won't save much memory at all
+    memcpy(lzw->packed, dst, cSize);
+    RedisModule_Free(dst);
+}
+
+static inline char *SP_UNPACK(SPLZWCont *lzw) {
+    char *res = RedisModule_Alloc(sizeof(char) * (lzw->oSize + 1));
+    res[lzw->oSize] = 0; //null the last char
+    if (!LZ4_decompress_fast(lzw->packed, res, lzw->oSize)) {
+        RedisModule_Free(res);
+        return NULL;
+    }
+    return res;
 }
 
 void SpredisDocRDBSave(RedisModuleIO *io, void *ptr) {
@@ -12,12 +39,13 @@ void SpredisDocRDBSave(RedisModuleIO *io, void *ptr) {
     RedisModule_SaveUnsigned(io, kh_size(dc->idMap));
 
     khint_t k, k2;
+    const char *doc, *strKey;
     for (k = 0; k < kh_end(dc->idMap); ++k) {
         if (kh_exist(dc->idMap, k)) {
-            const char* strKey = kh_key(dc->idMap, k);
+            strKey = kh_key(dc->idMap, k);
             spid_t rid = kh_value(dc->idMap, k);
             k2 = kh_get(DOC, dc->documents, rid);
-            const char *doc = kh_value(dc->documents, k2);
+            doc = kh_value(dc->documents, k2);
 
             RedisModule_SaveUnsigned(io, rid);
             // RedisModuleString *rsKey = Redi

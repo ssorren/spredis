@@ -4,9 +4,15 @@
 
 
 #include "../spredis.h"
+typedef struct _SPLZWCont {
+	size_t oSize;
+	char *packed;
+} SPLZWCont;
 
+KHASH_DECLARE(LZW, spid_t, SPLZWCont*);
 KHASH_DECLARE(DOC, spid_t, const char*);
 KHASH_DECLARE(DOCID, const char*, spid_t);
+KHASH_MAP_INIT_INT64(LZW, SPLZWCont*);
 KHASH_MAP_INIT_INT64(DOC, const char*);
 KHASH_MAP_INIT_STR(DOCID, spid_t);
 
