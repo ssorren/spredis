@@ -149,14 +149,14 @@
 #define likely(expr)     expect((expr) != 0, 1)
 #define unlikely(expr)   expect((expr) != 0, 0)
 
-
+#include "./redismodule.h"
 /*-************************************
 *  Memory routines
 **************************************/
 #include <stdlib.h>   /* malloc, calloc, free */
-#define ALLOC(s) malloc(s)
-#define ALLOC_AND_ZERO(s) calloc(1,s)
-#define FREEMEM        free
+#define ALLOC(s) RedisModule_Alloc(s)
+#define ALLOC_AND_ZERO(s) RedisModule_Calloc(1,s)
+#define FREEMEM        RedisModule_Free
 #include <string.h>   /* memset, memcpy */
 #define MEM_INIT       memset
 
