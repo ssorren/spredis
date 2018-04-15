@@ -233,7 +233,7 @@ int SpredisDocAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     RedisModule_ReplyWithLongLong(ctx, rid);
 
     char ress[32];
-    sprintf(ress, "%" PRIx64, (unsigned long long)rid);
+    sprintf(ress, "%" PRIx64, rid);
     RedisModule_ReplyWithStringBuffer(ctx, ress, strlen(ress));
     SpredisUnProtectMap(dc);//, "SpredisDocAdd_RedisCommand");
     return REDISMODULE_OK;

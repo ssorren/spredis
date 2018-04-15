@@ -53,7 +53,7 @@ void SpredisZSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *va
     spid_t id;
     sp_scoreset_each(SCORESET, cont->btree, val, id, {
         char ress[32];
-        sprintf(ress, "%" PRIx64, (unsigned long long)id);
+        sprintf(ress, "%" PRIx64, id);
         char dbl[50];
         sprintf(dbl, "%1.17g" , (double)val);
         RedisModule_EmitAOF(aof,"spredis.zadd","scc", key, ress, dbl);
@@ -223,7 +223,7 @@ int SpredisZScoreLinkSet_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
 
     SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
     SPUnlockContext(ctx);
-    
+
     SpredisProtectReadMap(cont);//, "SpredisZScoreLinkSet_RedisCommand");
     SPScoreSetKey *p;
     SPScoreSetKey search = {.value = (SPPtrOrD_t)value};
@@ -295,8 +295,9 @@ int SpredisZSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, i
     SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
     spid_t id = TOINTID(argv[2],16);
     double score;
-    int scoreRes;
-    scoreRes = RedisModule_StringToDouble(argv[3], &score);
+    // int scoreRes;
+    // scoreRes = 
+    RedisModule_StringToDouble(argv[3], &score);
 
     // int res = 
 
