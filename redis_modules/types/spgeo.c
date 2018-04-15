@@ -174,7 +174,7 @@ void SpredisZGeoSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void 
     sp_scoreset_each(GEOSET, cont->btree, val, id, {
         SPGeoHashDecode(val, &lat, &lon);
         char ress[32];
-        sprintf(ress, "%" PRIx64, (unsigned long long)id);
+        sprintf(ress, "%" PRIx64, id);
         char slat[50];
         sprintf(slat, "%1.17g" ,lat);
         char slon[50];

@@ -56,7 +56,7 @@ void SpredisSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *val
     spid_t id;
     kh_foreach_key(dhash->set, id, {
         char ress[32];
-        sprintf(ress, "%" PRIx64, (unsigned long long)id);
+        sprintf(ress, "%" PRIx64, id);
         // RedisModule_CreateStringPrintf(ctx, "%" PRIx32, id);
         RedisModule_EmitAOF(aof,"spredis.sadd","sc", key, ress);
     });

@@ -54,7 +54,7 @@ void SpredisZLexSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void 
     sp_scoreset_each(LEXSET, cont->btree, val, id, {
         const char *vkey =  (const char *)val;
         char ress[32];
-        sprintf(ress, "%" PRIx64, (unsigned long long)id);
+        sprintf(ress, "%" PRIx64, id);
         RedisModule_EmitAOF(aof,"spredis.zladd","sclc", key, ress, cont->sort, vkey);
     });
 }

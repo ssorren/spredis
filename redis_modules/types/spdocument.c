@@ -317,7 +317,7 @@ int SpredisDocGetByDocID_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **a
         RedisModule_ReplyWithArray(ctx, 3);
         RedisModule_ReplyWithLongLong(ctx, rid);
         char ress[32];
-        sprintf(ress, "%" PRIx64, (unsigned long long)rid);
+        sprintf(ress, "%" PRIx64, rid);
         RedisModule_ReplyWithStringBuffer(ctx, ress, strlen(ress));
         SPLZWCont *lzw = kh_value(dc->documents, k);
         char *doc = SP_UNPACK(lzw);
