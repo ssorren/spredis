@@ -179,17 +179,17 @@ int SpredisIntroSortSset(RedisModuleCtx *ctx, RedisModuleKey *zkey, SpredisSetCo
     targ->datas = tempRes->data;
     targ->mcd = mcd;
 
-    SpredisProtectReadMap(cont, "SpredisIntroSortSset");
+    SpredisProtectReadMap(cont);//, "SpredisIntroSortSset");
     int j = mcd->colCount;
     while (j) {
-        SpredisProtectReadMap(mcd->cols[--j], "SpredisIntroSortSset");
+        SpredisProtectReadMap(mcd->cols[--j]);//, "SpredisIntroSortSset");
     }
     SPThreadedSort(targ);
     j = mcd->colCount;
     while (j) {
-        SpredisUnProtectMap(mcd->cols[--j], "SpredisIntroSortSset");
+        SpredisUnProtectMap(mcd->cols[--j]);//, "SpredisIntroSortSset");
     }
-    SpredisUnProtectMap(cont, "SpredisIntroSortSset");
+    SpredisUnProtectMap(cont);//, "SpredisIntroSortSset");
     
     SPThreadedSort_FreeArg(targ);
     RedisModule_ReplyWithSimpleString(ctx,"OK");
@@ -321,7 +321,7 @@ int SpredisExprResolve_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **ar
 
     SpredisTempResult *res = RedisModule_ModuleTypeGetValue(resultKey);
     SpExpResolverCont *exp = RedisModule_ModuleTypeGetValue(exprKey);
-    SpredisProtectReadMap(exp, "SpredisExprResolve_RedisCommandT");
+    SpredisProtectReadMap(exp);//, "SpredisExprResolve_RedisCommandT");
     SPUnlockContext(ctx);
 
     khash_t(SORTTRACK) *set = exp->set;
@@ -343,7 +343,7 @@ int SpredisExprResolve_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **ar
         finalCount++;
         start++;
     }
-    SpredisUnProtectMap(exp, "SpredisExprResolve_RedisCommandT");
+    SpredisUnProtectMap(exp);//, "SpredisExprResolve_RedisCommandT");
     RedisModule_ReplySetArrayLength(ctx, finalCount);
     return REDISMODULE_OK;
 }

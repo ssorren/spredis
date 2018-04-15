@@ -57,9 +57,9 @@ void SPFreeSPStoreRadiusTarg(void *arg) {
 
 void SpredisStoreRangeByRadiusField_Thread(SPStoreRadiusTarg *targ) {
 
-    SpredisProtectReadMap(targ->geoCont, "SpredisStoreRangeByRadiusField_Thread");
-    if (targ->hintCont) SpredisProtectReadMap(targ->hintCont, "SpredisStoreRangeByRadiusField_Thread");
-    SpredisProtectReadMap(targ->resCont, "SpredisStoreRangeByRadiusField_Thread");
+    SpredisProtectReadMap(targ->geoCont);//, "SpredisStoreRangeByRadiusField_Thread");
+    if (targ->hintCont) SpredisProtectReadMap(targ->hintCont);//, "SpredisStoreRangeByRadiusField_Thread");
+    SpredisProtectReadMap(targ->resCont);//, "SpredisStoreRangeByRadiusField_Thread");
 
     double slat = targ->slat;
     double slon = targ->slon;
@@ -142,9 +142,9 @@ void SpredisStoreRangeByRadiusField_Thread(SPStoreRadiusTarg *targ) {
            
     // RedisModule_ZsetRangeStop(key);
     targ->reply = kh_size(res);
-    SpredisUnProtectMap(geoCont, "SpredisStoreRangeByRadiusField_Thread");
-    if (hintCont) SpredisUnProtectMap(hintCont, "SpredisStoreRangeByRadiusField_Thread");
-    SpredisUnProtectMap(resCont, "SpredisStoreRangeByRadiusField_Thread");
+    SpredisUnProtectMap(geoCont);//, "SpredisStoreRangeByRadiusField_Thread");
+    if (hintCont) SpredisUnProtectMap(hintCont);//, "SpredisStoreRangeByRadiusField_Thread");
+    SpredisUnProtectMap(resCont);//, "SpredisStoreRangeByRadiusField_Thread");
 
     RedisModule_UnblockClient(targ->bc,targ);
 }
@@ -153,9 +153,9 @@ void SpredisStoreRangeByRadius_Thread(SPStoreRadiusTarg *targ) {
     // SPStoreRadiusTarg *targ = arg;
     if (targ->radiusField != NULL) return SpredisStoreRangeByRadiusField_Thread(targ);
 
-    SpredisProtectReadMap(targ->geoCont, "SpredisStoreRangeByRadius_Thread");
-    if (targ->hintCont) SpredisProtectReadMap(targ->hintCont, "SpredisStoreRangeByRadius_Thread");
-    SpredisProtectReadMap(targ->resCont, "SpredisStoreRangeByRadius_Thread");
+    SpredisProtectReadMap(targ->geoCont);//, "SpredisStoreRangeByRadius_Thread");
+    if (targ->hintCont) SpredisProtectReadMap(targ->hintCont);//, "SpredisStoreRangeByRadius_Thread");
+    SpredisProtectReadMap(targ->resCont);//, "SpredisStoreRangeByRadius_Thread");
 
     double slat = targ->slat;
     double slon = targ->slon;
@@ -208,9 +208,9 @@ void SpredisStoreRangeByRadius_Thread(SPStoreRadiusTarg *targ) {
     
     // RedisModule_ZsetRangeStop(key);
     targ->reply = kh_size(res);
-    SpredisUnProtectMap(geoCont, "SpredisStoreRangeByRadius_Thread");
-    if (hintCont) SpredisUnProtectMap(hintCont, "SpredisStoreRangeByRadius_Thread");
-    SpredisUnProtectMap(resCont, "SpredisStoreRangeByRadius_Thread");
+    SpredisUnProtectMap(geoCont);//, "SpredisStoreRangeByRadius_Thread");
+    if (hintCont) SpredisUnProtectMap(hintCont);//, "SpredisStoreRangeByRadius_Thread");
+    SpredisUnProtectMap(resCont);//, "SpredisStoreRangeByRadius_Thread");
 
     RedisModule_UnblockClient(targ->bc,targ);
 }
@@ -428,8 +428,8 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
     int reached = 0;
     
     kbitr_t itr;
-    SpredisProtectReadMap(testScoreCont, "SpredisStoreRangeByScore_RedisCommandT");
-    if (hintCont) SpredisProtectReadMap(hintCont, "SpredisStoreRangeByScore_RedisCommandT");
+    SpredisProtectReadMap(testScoreCont);//, "SpredisStoreRangeByScore_RedisCommandT");
+    if (hintCont) SpredisProtectReadMap(hintCont);//, "SpredisStoreRangeByScore_RedisCommandT");
     if (l != NULL) {
         kb_itr_getp(SCORESET, testScore, l, &itr);
     } else {
@@ -448,8 +448,8 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
             }
         }
     }
-    SpredisUnProtectMap(testScoreCont, "SpredisStoreRangeByScore_RedisCommandT");
-    if (hintCont) SpredisUnProtectMap(hintCont, "SpredisStoreRangeByScore_RedisCommandT");
+    SpredisUnProtectMap(testScoreCont);//, "SpredisStoreRangeByScore_RedisCommandT");
+    if (hintCont) SpredisUnProtectMap(hintCont);//, "SpredisStoreRangeByScore_RedisCommandT");
     RedisModule_ReplyWithLongLong(ctx,kh_size(res));
     return REDISMODULE_OK;
 }
@@ -561,8 +561,8 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     };
     SPUnlockContext(ctx);
     
-    SpredisProtectReadMap(testLexCont, "SpredisStoreLexRange_RedisCommandT");
-    if (hintCont) SpredisProtectReadMap(hintCont, "SpredisStoreLexRange_RedisCommandT");
+    SpredisProtectReadMap(testLexCont);//, "SpredisStoreLexRange_RedisCommandT");
+    if (hintCont) SpredisProtectReadMap(hintCont);//, "SpredisStoreLexRange_RedisCommandT");
 
     kb_intervalp(LEXSET, testLex, &t, &l, &u);
     
@@ -587,8 +587,8 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
         }
     }
     // RedisModule_ZsetRangeStop(key);
-    SpredisUnProtectMap(testLexCont, "SpredisStoreLexRange_RedisCommandT");
-    if (hintCont) SpredisUnProtectMap(hintCont, "SpredisStoreLexRange_RedisCommandT");
+    SpredisUnProtectMap(testLexCont);//, "SpredisStoreLexRange_RedisCommandT");
+    if (hintCont) SpredisUnProtectMap(hintCont);//, "SpredisStoreLexRange_RedisCommandT");
     RedisModule_ReplyWithLongLong(ctx,kh_size(res));
 
     return REDISMODULE_OK;

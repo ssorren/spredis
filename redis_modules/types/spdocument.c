@@ -48,7 +48,7 @@ void SP_DESTROYLZW(SPLZWCont *lzw) {
 
 void SpredisDocRDBSave(RedisModuleIO *io, void *ptr) {
     SPDocContainer *dc = ptr;
-    SpredisProtectReadMap(dc, "SpredisDocRDBSave");
+    SpredisProtectReadMap(dc);//, "SpredisDocRDBSave");
     RedisModule_SaveUnsigned(io, dc->newRecordId);
     RedisModule_SaveUnsigned(io, kh_size(dc->idMap));
 
@@ -71,13 +71,13 @@ void SpredisDocRDBSave(RedisModuleIO *io, void *ptr) {
             // printf("Writing %llu, %s, %zu, %zu\n", rid, strKey, strlen(strKey), strlen(doc));
         }
     }
-    SpredisUnProtectMap(dc, "SpredisDocRDBSave");
+    SpredisUnProtectMap(dc);//, "SpredisDocRDBSave");
 }
 
 void SpredisDocRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value) {
     SPDocContainer *dc = value;
     khint_t k, k2;
-    SpredisProtectReadMap(dc, "SpredisDocRewriteFunc");
+    SpredisProtectReadMap(dc);//, "SpredisDocRewriteFunc");
     for (k = 0; k < kh_end(dc->idMap); ++k) {
         if (kh_exist(dc->idMap, k)) {
             const char* strKey = kh_key(dc->idMap, k);
@@ -88,7 +88,7 @@ void SpredisDocRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *val
             RedisModule_Free(doc);
         }
     }
-    SpredisUnProtectMap(dc, "SpredisDocRewriteFunc");
+    SpredisUnProtectMap(dc);//, "SpredisDocRewriteFunc");
 
 }
 
@@ -153,7 +153,7 @@ SPDocContainer *SPDocContainerInit() {
 void SPDocContainerDestroy(SPDocContainer *dc) {
     if (dc == NULL) return;
     khint_t k;
-    SpredisProtectWriteMap(dc, "SPDocContainerDestroy");
+    SpredisProtectWriteMap(dc);//, "SPDocContainerDestroy");
     for (k = 0; k < kh_end(dc->idMap); ++k) {
         if (kh_exist(dc->idMap, k)) RedisModule_Free((char*)kh_key(dc->idMap, k));
     }
@@ -166,7 +166,7 @@ void SPDocContainerDestroy(SPDocContainer *dc) {
     }
     kh_destroy(LZW, dc->documents);
     kh_destroy(RID, dc->revId);
-    SpredisUnProtectMap(dc, "SPDocContainerDestroy");
+    SpredisUnProtectMap(dc);//, "SPDocContainerDestroy");
     pthread_rwlock_destroy(&dc->mutex);
     RedisModule_Free(dc);
 }
@@ -208,7 +208,7 @@ int SpredisDocAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     } else {
         dc = RedisModule_ModuleTypeGetValue(key);
     }
-    SpredisProtectWriteMap(dc, "SpredisDocAdd_RedisCommand");
+    SpredisProtectWriteMap(dc);//, "SpredisDocAdd_RedisCommand");
     khint_t k;
     spid_t rid;
     int absent;
@@ -235,7 +235,7 @@ int SpredisDocAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     char ress[32];
     sprintf(ress, "%" PRIx64, (unsigned long long)rid);
     RedisModule_ReplyWithStringBuffer(ctx, ress, strlen(ress));
-    SpredisUnProtectMap(dc, "SpredisDocAdd_RedisCommand");
+    SpredisUnProtectMap(dc);//, "SpredisDocAdd_RedisCommand");
     return REDISMODULE_OK;
 }
 
@@ -259,7 +259,7 @@ int SpredisDocRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     } else {
         dc = RedisModule_ModuleTypeGetValue(key);
     }
-    SpredisProtectWriteMap(dc, "SpredisDocRem_RedisCommand");
+    SpredisProtectWriteMap(dc);//, "SpredisDocRem_RedisCommand");
     khint_t k;
     spid_t rid;
     k = kh_get(DOCID, dc->idMap, stringId);
@@ -282,7 +282,7 @@ int SpredisDocRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     } else {
         RedisModule_ReplyWithLongLong(ctx, 0);
     }
-    SpredisUnProtectMap(dc, "SpredisDocRem_RedisCommand");
+    SpredisUnProtectMap(dc);//, "SpredisDocRem_RedisCommand");
     return REDISMODULE_OK;
 }
 
@@ -306,7 +306,7 @@ int SpredisDocGetByDocID_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **a
     } else {
         dc = RedisModule_ModuleTypeGetValue(key);
     }
-    SpredisProtectReadMap(dc, "SpredisDocGetByDocID_RedisCommand");
+    SpredisProtectReadMap(dc);//, "SpredisDocGetByDocID_RedisCommand");
     khint_t k;
     spid_t rid;
     k = kh_get(DOCID, dc->idMap, stringId);
@@ -326,6 +326,6 @@ int SpredisDocGetByDocID_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **a
     } else {
         RedisModule_ReplyWithNull(ctx);
     }
-    SpredisUnProtectMap(dc, "SpredisDocGetByDocID_RedisCommand");
+    SpredisUnProtectMap(dc);//, "SpredisDocGetByDocID_RedisCommand");
     return REDISMODULE_OK;
 }

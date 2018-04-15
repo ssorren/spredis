@@ -47,7 +47,7 @@ int SpredisFacetRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **arg
     			facet->field = NULL;
 		    } else {
 		    	facet->field = RedisModule_ModuleTypeGetValue(fkey);
-		    	SpredisProtectReadMap(facet->field, "SpredisFacetRange_RedisCommandT");
+		    	SpredisProtectReadMap(facet->field);//, "SpredisFacetRange_RedisCommandT");
 		    }
     	}
     	SPUnlockContext(ctx);
@@ -82,7 +82,7 @@ int SpredisFacetRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **arg
 
 	for (int i = 0; i < facetCount; ++i) {
 		facet = &facets[i];
-		if (facet->field != NULL) SpredisUnProtectMap(facet->field, "SpredisFacetRange_RedisCommandT");
+		if (facet->field != NULL) SpredisUnProtectMap(facet->field);//, "SpredisFacetRange_RedisCommandT");
 	}
 	RedisModule_ReplyWithArray(ctx, facetCount);
 	for (int i = 0; i < facetCount; ++i) {

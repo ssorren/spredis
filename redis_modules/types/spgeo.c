@@ -144,19 +144,19 @@ void SpredisZGeoSetFreeCallback(void *value) {
 }
 
 int SPGeoScorePutValue(SPScoreCont *cont, spid_t id, uint16_t pos, double lat, double lon) {
-	SpredisProtectWriteMap(cont, "SPGeoScorePutValue");
+	SpredisProtectWriteMap(cont);//, "SPGeoScorePutValue");
     SPPtrOrD_t val = (SPPtrOrD_t)SPGeoHashEncode(lat, lon);
     SPAddGeoScoreToSet(cont->btree, cont->st, id, (SPPtrOrD_t)val);
-    SpredisUnProtectMap(cont, "SPGeoScorePutValue");
+    SpredisUnProtectMap(cont);//, "SPGeoScorePutValue");
 	return 1;
 }
 
 
 int SPGeoScoreDel(SPScoreCont *cont, spid_t id, double lat, double lon) {
-	SpredisProtectWriteMap(cont,"SPGeoScoreDel");
+	SpredisProtectWriteMap(cont);//,"SPGeoScoreDel");
     SPPtrOrD_t val = (SPPtrOrD_t)SPGeoHashEncode(lat, lon);
     SPRemGeoScoreFromSet(cont->btree, cont->st, id, (SPPtrOrD_t)val);
-	SpredisUnProtectMap(cont,"SPGeoScoreDel");
+	SpredisUnProtectMap(cont);//,"SPGeoScoreDel");
 	return 1;
 }
 
@@ -186,22 +186,6 @@ void SpredisZGeoSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void 
 
 void *SpredisZGeoSetRDBLoad(RedisModuleIO *io, int encver) {
     return SpredisZSetRDBLoad(io,encver);
-    // if (encver != SPREDISDHASH_ENCODING_VERSION) {
-    //     /* We should actually log an error here, or try to implement
-    //        the ability to load older versions of our data structure. */
-    //     return NULL;
-    // }
-    
-    // SPScoreCont *dhash = SPGeoScoreContInit();
-    // spid_t valueCount = RedisModule_LoadUnsigned(io);
-    // for (spid_t i = 0; i < valueCount; ++i)
-    // {
-    //     spid_t id = RedisModule_LoadUnsigned(io);
-    //     double lat = RedisModule_LoadDouble(io);
-    //     double lon = RedisModule_LoadDouble(io);
-    //     SPGeoScorePutValue(dhash, id, 0, lat, lon);
-    // }
-    // return dhash;
 }
 
 
@@ -220,9 +204,9 @@ int SpredisZGeoSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **arg
     }
 
     SPScoreCont *dhash = RedisModule_ModuleTypeGetValue(key);
-    SpredisProtectReadMap(dhash, "SpredisZGeoSetCard_RedisCommand");
+    SpredisProtectReadMap(dhash);//, "SpredisZGeoSetCard_RedisCommand");
     RedisModule_ReplyWithLongLong(ctx,kb_size(dhash->btree));
-    SpredisUnProtectMap(dhash, "SpredisZGeoSetCard_RedisCommand");
+    SpredisUnProtectMap(dhash);//, "SpredisZGeoSetCard_RedisCommand");
     // RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }
@@ -334,21 +318,10 @@ int SpredisZGeoSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **ar
         return REDISMODULE_OK;
     }
     SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
-    SpredisProtectReadMap(cont, "SpredisZGeoSetScore_RedisCommand");
- //    SPScore *score;
- //    spid_t id = TOINTKEY(argv[2]);
- //    khint_t k = kh_get(SCORE, cont->set, id);
-	// if (kh_exist(cont->set, k)) {
-	// 	score = kh_value(cont->set, k);
-	// 	RedisModule_ReplyWithArray(ctx, 2);
- //        double lat, lon;
- //        SPGeoHashDecode(score->score, &lat, &lon);
-	// 	RedisModule_ReplyWithDouble(ctx, lat);
-	// 	RedisModule_ReplyWithDouble(ctx, lon);
-	// } else {
+    SpredisProtectReadMap(cont);//, "SpredisZGeoSetScore_RedisCommand");
+
 		RedisModule_ReplyWithNull(ctx);
-	// }
-    // RedisModule_CloseKey(key);
-    SpredisUnProtectMap(cont, "SpredisZGeoSetScore_RedisCommand");
+
+    SpredisUnProtectMap(cont);//, "SpredisZGeoSetScore_RedisCommand");
     return REDISMODULE_OK;
 }

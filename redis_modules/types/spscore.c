@@ -23,7 +23,7 @@ SPScoreCont *SPScoreContInit() {
 
 
 void SPScoreContDestroy(SPScoreCont *cont) {
-	SpredisProtectWriteMap(cont, "SPScoreContDestroy");
+	SpredisProtectWriteMap(cont);//, "SPScoreContDestroy");
     SPDestroyScoreSet(cont->btree);
 	// kbtree_t(SCORESET)* tree = cont->btree;	
  //    kb_destroy(SCORESET, tree);
@@ -32,7 +32,7 @@ void SPScoreContDestroy(SPScoreCont *cont) {
     // 	RedisModule_Free(score);
     // });
     kh_destroy(SORTTRACK, cont->st);
-    SpredisUnProtectMap(cont, "SPScoreContDestroy");
+    SpredisUnProtectMap(cont);//, "SPScoreContDestroy");
     pthread_rwlock_destroy(&cont->mutex);
     RedisModule_Free(cont);
 }
@@ -41,9 +41,9 @@ void SPScoreContDestroy(SPScoreCont *cont) {
 
 void SpredisZSetRDBSave(RedisModuleIO *io, void *ptr) {
     SPScoreCont *cont = ptr;
-    SpredisProtectReadMap(cont,"SpredisZSetRDBSave");
+    SpredisProtectReadMap(cont);//,"SpredisZSetRDBSave");
     SPWriteScoreSetToRDB(io, cont->btree);
-    SpredisUnProtectMap(cont,"SpredisZSetRDBSave");
+    SpredisUnProtectMap(cont);//,"SpredisZSetRDBSave");
 }
 
 
@@ -70,9 +70,9 @@ void *SpredisZSetRDBLoad(RedisModuleIO *io, int encver) {
     }
     
     SPScoreCont *cont = SPScoreContInit();
-    SpredisProtectWriteMap(cont, "SpredisZSetRDBLoad");
+    SpredisProtectWriteMap(cont);//, "SpredisZSetRDBLoad");
     SPReadScoreSetFromRDB(io, cont->btree, cont->st);
-    SpredisUnProtectMap(cont, "SpredisZSetRDBLoad");
+    SpredisUnProtectMap(cont);//, "SpredisZSetRDBLoad");
     return cont;
 }
 
@@ -88,18 +88,18 @@ void SpredisZSetFreeCallback(void *value) {
 
 
 int SPScorePutValue(SPScoreCont *cont, spid_t id, double val) {
-	SpredisProtectWriteMap(cont, "SPScorePutValue");
+	SpredisProtectWriteMap(cont);//, "SPScorePutValue");
 
     SPAddScoreToSet(cont->btree, cont->st, id, (SPPtrOrD_t)val);
-    SpredisUnProtectMap(cont, "SPScorePutValue");
+    SpredisUnProtectMap(cont);//, "SPScorePutValue");
 	return 1;
 }
 
 int SPScoreDel(SPScoreCont *cont, spid_t id, double val) {
-	SpredisProtectWriteMap(cont, "SPScoreDel");
+	SpredisProtectWriteMap(cont);//, "SPScoreDel");
     SPRemScoreFromSet(cont->btree, cont->st, id, (SPPtrOrD_t)val);
 	
-    SpredisUnProtectMap(cont, "SPScoreDel");
+    SpredisUnProtectMap(cont);//, "SPScoreDel");
 	return 1;
 }
 
@@ -222,18 +222,21 @@ int SpredisZScoreLinkSet_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     }
 
     SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
-    SpredisProtectReadMap(cont, "SpredisZScoreLinkSet_RedisCommand");
+    SPUnlockContext(ctx);
+    
+    SpredisProtectReadMap(cont);//, "SpredisZScoreLinkSet_RedisCommand");
     SPScoreSetKey *p;
     SPScoreSetKey search = {.value = (SPPtrOrD_t)value};
     SpredisSetCont *result;
     p = kb_getp(SCORESET, cont->btree, &search);
-    SPUnlockContext(ctx);
+    
     result = _SpredisInitSet();
     if (p) {
         // if (kh_size(p->members->set)) {
         //     kh_resize(SIDS, result->set, p->members->set->n_buckets);
         // }
-        SPAddAllToSet(result->set, p, (khash_t(SIDS)*)NULL);
+        kh_dup_set(SIDS, result->set, p->members->set);
+        // SPAddAllToSet(result->set, p, (khash_t(SIDS)*)NULL);
     }
     // printf("trying to set key %s\n", RedisModule_StringPtrLen(argv[2], NULL));
     SPLockContext(ctx);
@@ -241,7 +244,7 @@ int SpredisZScoreLinkSet_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     SPUnlockContext(ctx);
     // printf("set key %s\n", RedisModule_StringPtrLen(argv[2], NULL));
     RedisModule_ReplyWithLongLong(ctx, kh_size(result->set));
-    SpredisUnProtectMap(cont, "SpredisZScoreLinkSet_RedisCommand");
+    SpredisUnProtectMap(cont);//, "SpredisZScoreLinkSet_RedisCommand");
     return REDISMODULE_OK;
 }
 
@@ -266,9 +269,9 @@ int SpredisZSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, 
     }
 
     SPScoreCont *dhash = RedisModule_ModuleTypeGetValue(key);
-    SpredisProtectReadMap(dhash, "SpredisZSetCard_RedisCommand");
+    SpredisProtectReadMap(dhash);//, "SpredisZSetCard_RedisCommand");
     RedisModule_ReplyWithLongLong(ctx, kb_size(dhash->btree));
-    SpredisUnProtectMap(dhash, "SpredisZSetCard_RedisCommand");
+    SpredisUnProtectMap(dhash);//, "SpredisZSetCard_RedisCommand");
     // RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }
@@ -308,11 +311,11 @@ int SpredisZSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, i
     // 	RedisModule_ReplyWithLongLong(ctx,0);
     // }
     // 
-    SpredisProtectReadMap(cont, "SpredisZSetRem_RedisCommand");
+    SpredisProtectReadMap(cont);//, "SpredisZSetRem_RedisCommand");
     if (kb_size(cont->btree) == 0) {
         RedisModule_DeleteKey(key);
     }
-    SpredisUnProtectMap(cont, "SpredisZSetRem_RedisCommand");
+    SpredisUnProtectMap(cont);//, "SpredisZSetRem_RedisCommand");
 
     // RedisModule_CloseKey(key);
     // RedisModule_ReplyWithLongLong(ctx, (remRes == MAP_OK) ? 1 : 0);

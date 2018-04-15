@@ -4,7 +4,7 @@
 
 // KV_INIT(SPScoreCont);
 #define SORTINTERVAL 30;
-#define QUICKSORTINTERVAL 2;
+// #define QUICKSORTINTERVAL 2;
 
 void *SPSortQApplyThread(void *x_void_ptr);
 
@@ -65,7 +65,7 @@ void *SPSortQApplyThread(void *x_void_ptr) {
 		while (kv_size(SPRESORTQ->q)) {
 			SPRESORTQ->resorting = kv_pop(SPRESORTQ->q);
 			if (SPRESORTQ->resorting == NULL) continue;
-			SpredisProtectWriteMap(SPRESORTQ->resorting, "SPSortQApplyThread");
+			SpredisProtectWriteMap(SPRESORTQ->resorting);//, "SPSortQApplyThread");
 			// if (SpredisProtectWriteMap(&SPRESORTQ->resorting, "SPSortQApplyThread")) {
 			// 	kv_push(SPScoreCont*, SPRESORTQ->q, SPRESORTQ->resorting);
 			// 	SPRESORTQ->resorting = NULL;
@@ -86,7 +86,7 @@ void *SPSortQApplyThread(void *x_void_ptr) {
 		        }
 				kb_itr_next(LEXSET, SPRESORTQ->resorting->btree, &itr);
 		    }
-			SpredisUnProtectMap(SPRESORTQ->resorting, "SPSortQApplyThread");
+			SpredisUnProtectMap(SPRESORTQ->resorting);//, "SPSortQApplyThread");
 			SPRESORTQ->resorting = NULL;
 			// go back to normal speed. wait 10 seconds, let the q build up
 			sleepSeconds = SORTINTERVAL;

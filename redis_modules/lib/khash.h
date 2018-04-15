@@ -221,6 +221,17 @@ static const double __ac_HASH_UPPER = 0.77;
 		khval_t head; \
 	} kh_##name##_t;
 
+#define kh_dup_set(name, dst, src) { \
+	dst->n_buckets = src->n_buckets; \
+	dst->size = src->size; \
+	dst->n_occupied = src->n_occupied; \
+	dst->upper_bound = src->upper_bound; \
+	dst->flags = krealloc(dst->flags, __ac_fsize(dst->n_buckets) * sizeof(khint32_t) ); \
+	dst->keys = krealloc(dst->keys, dst->n_buckets * sizeof(kh_##name##_t)); \
+	memcpy(dst->flags, src->flags, __ac_fsize(dst->n_buckets) * sizeof(khint32_t)); \
+	memcpy(dst->keys, src->keys, dst->n_buckets * sizeof(kh_##name##_t)); \
+}
+
 #define __KHASH_PROTOTYPES(name, khkey_t, khval_t)	 					\
 	extern kh_##name##_t *kh_init_##name(void);							\
 	extern void kh_destroy_##name(kh_##name##_t *h);					\
