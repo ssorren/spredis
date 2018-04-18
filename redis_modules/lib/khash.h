@@ -222,14 +222,21 @@ static const double __ac_HASH_UPPER = 0.77;
 	} kh_##name##_t;
 
 #define kh_dup_set(name, dst, src) { \
-	dst->n_buckets = src->n_buckets; \
-	dst->size = src->size; \
-	dst->n_occupied = src->n_occupied; \
-	dst->upper_bound = src->upper_bound; \
-	dst->flags = krealloc(dst->flags, __ac_fsize(dst->n_buckets) * sizeof(khint32_t) ); \
-	dst->keys = krealloc(dst->keys, dst->n_buckets * sizeof(kh_##name##_t)); \
-	memcpy(dst->flags, src->flags, __ac_fsize(dst->n_buckets) * sizeof(khint32_t)); \
-	memcpy(dst->keys, src->keys, dst->n_buckets * sizeof(kh_##name##_t)); \
+	if (dst != NULL && src != NULL && src->n_buckets) { \
+		printf("WTF1\n"); \
+		dst->n_buckets = src->n_buckets; \
+		dst->size = src->size; \
+		dst->n_occupied = src->n_occupied; \
+		dst->upper_bound = src->upper_bound; \
+		printf("WTF2\n"); \
+		dst->flags = krealloc(dst->flags, __ac_fsize(src->n_buckets) * sizeof(khint32_t) ); \
+		dst->keys = krealloc(dst->keys, src->n_buckets * sizeof(kh_##name##_t)); \
+		printf("WTF3, %lu\n", src->n_buckets); \
+		memcpy(dst->flags, src->flags, __ac_fsize(src->n_buckets) * sizeof(khint32_t)); \
+		printf("WTF4\n"); \
+		memcpy(dst->keys, src->keys, src->n_buckets * sizeof(kh_##name##_t)); \
+		printf("WTF5\n"); \
+	} \
 }
 
 #define __KHASH_PROTOTYPES(name, khkey_t, khval_t)	 					\
@@ -385,7 +392,7 @@ static const double __ac_HASH_UPPER = 0.77;
 		if (x != h->n_buckets && !__ac_iseither(h->flags, x)) {			\
 			__ac_set_isdel_true(h->flags, x);							\
 			--h->size;													\
-		}																\
+		}															\
 	}
 
 #define KHASH_DECLARE(name, khkey_t, khval_t)		 					\

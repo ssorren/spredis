@@ -235,8 +235,8 @@ int SpredisZScoreLinkSet_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
         // if (kh_size(p->members->set)) {
         //     kh_resize(SIDS, result->set, p->members->set->n_buckets);
         // }
-        kh_dup_set(SIDS, result->set, p->members->set);
-        // SPAddAllToSet(result->set, p, (khash_t(SIDS)*)NULL);
+        // kh_dup_set(SIDS, result->set, p->members->set);
+        SPAddAllToSet(result->set, p, (khash_t(SIDS)*)NULL);
     }
     // printf("trying to set key %s\n", RedisModule_StringPtrLen(argv[2], NULL));
     SPLockContext(ctx);

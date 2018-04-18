@@ -19,11 +19,12 @@ function go(config) {
 		const app = new Koa();
 		app.use(body({ limit: '512kb', fallback: true }))
 		const router = new Router();
-		router.get('/', (ctx, next) => {
-		  ctx.response.body = 'Looking for something?';
-		});
+		let prefix = config.urlPrefix || '';
+		// router.get('/', (ctx, next) => {
+		//   ctx.response.body = 'Looking for something?';
+		// });
 
-		router.post(`/:ns/search`, async (ctx, next) => {
+		router.post(`${prefix}/:ns/search`, async (ctx, next) => {
 			try {
 				let ns = await spredis.useNamespace(ctx.params.ns);
 				if (!ns) throw new Error(`Can not find namespace: '${ctx.params.ns}'`);
@@ -35,7 +36,7 @@ function go(config) {
 			}
 		});
 
-		router.post(`/:ns/addDocuments`, async (ctx, next) => {
+		router.post(`${prefix}/:ns/addDocuments`, async (ctx, next) => {
 			try {
 				let ns = await spredis.useNamespace(ctx.params.ns);
 				if (!ns) throw new Error(`Can not find namespace: '${ctx.params.ns}'`);
@@ -47,7 +48,7 @@ function go(config) {
 			}
 		});
 
-		router.post(`/:ns/deleteDocuments`, async (ctx, next) => {
+		router.post(`${prefix}/:ns/deleteDocuments`, async (ctx, next) => {
 			try {
 				let ns = await spredis.useNamespace(ctx.params.ns);
 				if (!ns) throw new Error(`Can not find namespace: '${ctx.params.ns}'`);
@@ -59,7 +60,7 @@ function go(config) {
 			}
 		});
 
-		router.post('/createNamespace', async (ctx, next) => {
+		router.post(`${prefix}/createNamespace`, async (ctx, next) => {
 			try {
 				let res = await spredis.createNamespace(ctx.request.body);
 				let id = ctx.params.id;
@@ -70,7 +71,7 @@ function go(config) {
 			}
 		});
 
-		router.get('/:ns/doc/:id', async (ctx, next) => {
+		router.get(`${prefix}/:ns/doc/:id`, async (ctx, next) => {
 			try {
 				let ns = await spredis.useNamespace(ctx.params.ns);
 				let id = ctx.params.id;
@@ -85,7 +86,7 @@ function go(config) {
 			}
 		});
 
-		router.get('/:ns/namespaceConfig', async (ctx, next) => {
+		router.get(`${prefix}/:ns/namespaceConfig`, async (ctx, next) => {
 			try {
 				let ns = await spredis.useNamespace(ctx.params.ns);
 
