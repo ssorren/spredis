@@ -221,21 +221,18 @@ static const double __ac_HASH_UPPER = 0.77;
 		khval_t head; \
 	} kh_##name##_t;
 
-#define kh_dup_set(name, dst, src) { \
-	if (dst != NULL && src != NULL && src->n_buckets) { \
-		printf("WTF1\n"); \
+#define kh_dup_set(khkey_t, dst, src) { \
+	if (src != NULL && dst != NULL) { \
 		dst->n_buckets = src->n_buckets; \
 		dst->size = src->size; \
 		dst->n_occupied = src->n_occupied; \
 		dst->upper_bound = src->upper_bound; \
-		printf("WTF2\n"); \
-		dst->flags = krealloc(dst->flags, __ac_fsize(src->n_buckets) * sizeof(khint32_t) ); \
-		dst->keys = krealloc(dst->keys, src->n_buckets * sizeof(kh_##name##_t)); \
-		printf("WTF3, %lu\n", src->n_buckets); \
+		if (dst->flags) kfree(dst->flags); \
+		if (dst->keys) kfree(dst->keys); \
+		dst->flags = kmalloc(__ac_fsize(src->n_buckets) * sizeof(khint32_t) ); \
+		dst->keys = kmalloc(src->n_buckets * sizeof(khkey_t)); \
 		memcpy(dst->flags, src->flags, __ac_fsize(src->n_buckets) * sizeof(khint32_t)); \
-		printf("WTF4\n"); \
-		memcpy(dst->keys, src->keys, src->n_buckets * sizeof(kh_##name##_t)); \
-		printf("WTF5\n"); \
+		memcpy(dst->keys, src->keys, src->n_buckets * sizeof(khkey_t)); \
 	} \
 }
 

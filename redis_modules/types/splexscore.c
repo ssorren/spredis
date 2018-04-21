@@ -222,8 +222,8 @@ int SpredisZLexLinkSet_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **ar
         // if (kh_size(p->members->set)) {
         //     kh_resize(SIDS, result->set, p->members->set->n_buckets);
         // }
-        // kh_dup_set(SIDS, result->set, p->members->set);
-        SPAddAllToSet(result->set, p, (khash_t(SIDS)*)NULL);
+        kh_dup_set(spid_t, result->set, p->members->set);
+        // SPAddAllToSet(result->set, p, (khash_t(SIDS)*)NULL);
     }
     
     SpredisUnProtectMap(cont);//, "SpredisZLexLinkSet_RedisCommand");

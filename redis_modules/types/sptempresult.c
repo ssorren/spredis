@@ -189,10 +189,8 @@ int SpredisTMPResGetIds_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **ar
         k = kh_get(RID, dc->revId, d->id);
         if (k != kh_end(dc->revId)) {
             RedisModule_ReplyWithStringBuffer(ctx, kh_value(dc->revId,k), strlen(kh_value(dc->revId,k)));
-        } else {
-            RedisModule_ReplyWithNull(ctx);
+            finalCount++;
         }
-        finalCount++;
         start++;
     }
     RedisModule_ReplySetArrayLength(ctx, finalCount);
