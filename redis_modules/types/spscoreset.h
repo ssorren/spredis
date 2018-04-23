@@ -34,6 +34,8 @@
 	    kh_foreach_key(___smaller,___id, { \
 	        if (kh_contains(SIDS, ___larger, ___id)) kh_put(SIDS, (svar), ___id, &___absent); \
 	    });    \
+    } else if (kh_size((svar)) == 0 && kh_size((kvar)->members->set)) { \
+    	kh_dup_set(spid_t, (svar), (kvar)->members->set); \
     } else { \
     	if ((svar)->n_buckets < (kvar)->members->set->n_buckets) kh_resize(SIDS, (svar), (kvar)->members->set->n_buckets);\
 	    kh_foreach_key( ((kvar)->members->set) ,___id, { \

@@ -333,6 +333,8 @@ int SpredisExprResolve_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **ar
     while(start < res->size && finalCount < count) {
         id = res->data[start]->id;
         k = kh_get(SORTTRACK, set, id);
+        // RedisModule_ReplyWithArray(ctx, 2);
+        // RedisModule_ReplyWithLongLong(ctx, 2);
         if (k == kh_end(set)) {
             // score = -HUGE_VAL;
             RedisModule_ReplyWithNull(ctx);
