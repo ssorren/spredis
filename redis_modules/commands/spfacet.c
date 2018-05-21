@@ -148,7 +148,7 @@ void SPThreadedFacet(void *arg) {
 			    if (av != NULL && av->type == SPHashStringType) {
 			    	// printf("found av\n");
 			    	kv_foreach_hv_value(av, &value, &pos, {
-			    		sav = (char*)value;
+			    		sav = value.asChar;
 			    		HASH_FIND_STR(facet->valMap, sav, fm);
 				    	if (fm) {
 				    		fm->count++;

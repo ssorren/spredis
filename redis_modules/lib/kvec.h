@@ -62,7 +62,7 @@ int main() {
 #define kv_max(v) ((v).m)
 
 /* modified to zero fill the empty portion of the array */
-#define kv_resize(type, v, s)  do { \
+#define kv_resize_bad(type, v, s)  do { \
 	(v).a = (type*)RedisModule_Realloc((v).a, sizeof(type) * (s)); \
 	for (size_t i = ((v).m); i < (s); ++i) \
 	{ \
@@ -71,13 +71,15 @@ int main() {
 	(v).m = (s); \
 } while(0)
 
+#define kv_resize(type, v, s)  ((v).m = (s), (v).a = (type*)RedisModule_Realloc((v).a, sizeof(type) * (v).m))
+
 /* 	begin spredis additions, don't hope to use these stand alone unless you understand sphash.c...
 	using an additional 'used' array to determine which indeces have values
 	used by sphash.c */
 #define kv_set_value(type, used, v, val, pos, do_free)  do { \
 	if (pos >= (v.m)) kv_resize(type, v, pos + 1); \
 	if (pos >= (used.m)) kv_resize(char, used, pos + 1); \
-	if (kv_A(used, pos) == 1 && do_free) RedisModule_Free((void*)kv_A(v, pos)); \
+	if (kv_A(used, pos) == 1 && do_free) RedisModule_Free((kv_A(v, pos)).asChar); \
 	kv_A(used, pos) = 1; \
 	kv_A(v, pos) = val; \
 } while(0)
@@ -85,7 +87,7 @@ int main() {
 #define kv_del_value(used, v, pos, do_free, res)  do { \
 	if (pos >= (v.m)) break; \
 	if (pos >= (used.m)) break; \
-	if (kv_A(used, pos) == 1 && do_free) RedisModule_Free((void*)kv_A(v, pos)); \
+	if (kv_A(used, pos) == 1 && do_free) RedisModule_Free((kv_A(v, pos)).asChar); \
 	if (kv_A(used, pos) == 1) (*res) += 1; \
 	kv_A(used, pos) = 0; \
 } while(0)

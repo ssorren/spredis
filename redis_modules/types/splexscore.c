@@ -52,7 +52,7 @@ void SpredisZLexSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void 
     SPPtrOrD_t val;
     spid_t id;
     sp_scoreset_each(LEXSET, cont->btree, val, id, {
-        const char *vkey =  (const char *)val;
+        const char *vkey =  (const char *)val.asChar;
         char ress[32];
         sprintf(ress, "%" PRIx64, id);
         RedisModule_EmitAOF(aof,"spredis.zladd","sclc", key, ress, cont->sort, vkey);
@@ -96,7 +96,8 @@ int SPLexScorePutValue(SPScoreCont *cont, spid_t id, const char *lexValue, int s
 	SpredisProtectWriteMap(cont);//, "SPLexScorePutValue");
     if (sort) cont->sort = sort;
     int resort;
-    SPAddLexScoreToSet(cont->btree, (sort ? cont->st : NULL), id, (SPPtrOrD_t)lexValue, sort ? &resort : NULL);
+    SPPtrOrD_t val = {.asChar = (char *)lexValue};
+    SPAddLexScoreToSet(cont->btree, (sort ? cont->st : NULL), id, val, sort ? &resort : NULL);
     if (sort && resort) {
         SpredisQSort(cont);
     }
@@ -107,7 +108,9 @@ int SPLexScorePutValue(SPScoreCont *cont, spid_t id, const char *lexValue, int s
 
 int SPLexScoreDel(SPScoreCont *cont, spid_t id, const char *lexValue) {
 	SpredisProtectWriteMap(cont);//, "SPLexScoreDel");
-    SPRemLexScoreFromSet(cont->btree, (cont->sort ? cont->st : NULL), id, (SPPtrOrD_t)lexValue);
+    SPPtrOrD_t val = {.asChar = (char *)lexValue};
+    // val.asChar = (char *)lexValue;
+    SPRemLexScoreFromSet(cont->btree, (cont->sort ? cont->st : NULL), id, val);
 	int res = 0;
 	SpredisUnProtectMap(cont);//, "SPLexScoreDel");
 	return res;
@@ -209,7 +212,8 @@ int SpredisZLexLinkSet_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **ar
 
     SpredisProtectReadMap(cont);//, "SpredisZLexLinkSet_RedisCommand");
     SPScoreSetKey *p;
-    SPScoreSetKey search = {.value = (SPPtrOrD_t)value};
+    SPScoreSetKey search = {.value.asChar = (char *)value};
+    // search.value.asChar = (char *)value;
     SpredisSetCont *result;
     p = kb_getp(LEXSET, cont->btree, &search);
     // if (p) {

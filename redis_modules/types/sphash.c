@@ -53,10 +53,10 @@ void SpredisHashRDBSave(RedisModuleIO *io, void *ptr) {
 		kv_foreach_value(hv->used, hv->values, &val, &pos, {
 			RedisModule_SaveUnsigned(io, pos);
 			if (cont->valueType == SPHashStringType) {
-				sVal = (char *)val;
+				sVal = val.asChar;
 				RedisModule_SaveStringBuffer(io, sVal, strlen(sVal));
 			} else {
-				RedisModule_SaveDouble(io, (double)val);
+				RedisModule_SaveDouble(io, val.asDouble);
 			}
 		});
     });
@@ -76,11 +76,11 @@ void SpredisHashRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *va
         sprintf(ress, "%" PRIx64, (uint64_t)hv->id);
 		kv_foreach_value(hv->used, hv->values, &val, &pos, {
 			if (cont->valueType == SPHashStringType) {
-				sVal = (char *)val;
+				sVal = val.asChar;
 				RedisModule_EmitAOF(aof,"spredis.hsetstr","sclc", key, ress, pos, sVal);
 			} else {
 				char score[50];
-		        sprintf(score, "%1.17g" ,(double)val);
+		        sprintf(score, "%1.17g" ,val.asDouble);
 		        RedisModule_EmitAOF(aof,"spredis.hsetdbl","sclc", key, ress, pos, score);
 			}
 		});
@@ -107,10 +107,11 @@ void *SpredisHashRDBLoad(RedisModuleIO *io, int encver) {
     		uint16_t pos = RedisModule_LoadUnsigned(io);
     		if (cont->valueType == SPHashStringType) {
     			RedisModuleString *s = RedisModule_LoadString(io);
-				val = (SPPtrOrD_t)RedisModule_Strdup( RedisModule_StringPtrLen(s, NULL));
+				val.asChar = RedisModule_Strdup( RedisModule_StringPtrLen(s, NULL));
+
                 RedisModule_FreeString(RedisModule_GetContextFromIO(io),s);
 			} else {
-				val = (SPPtrOrD_t)RedisModule_LoadDouble(io);
+				val.asDouble = RedisModule_LoadDouble(io);
 			}
     		SPHashPutValue(cont, id, pos, val);
     	}
@@ -128,7 +129,7 @@ void SpredisHashDestroy(void *value) {
 	kh_foreach_value(cont->set, hv, {
 		if (hv->type == SPHashStringType) {
 			kv_foreach_value(hv->used, hv->values, &t, &pos, {
-				RedisModule_Free((void *)t);
+				RedisModule_Free(t.asChar);
 			});
 		}
 		kv_destroy(hv->used);
@@ -198,11 +199,13 @@ int SpredisHashSet(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, SPHa
     			RedisModule_ReplyWithError(ctx, "ERR Could not parse double value");
     			break;
     		} else {
-    			kv_push(SPPtrOrD_t, ptrs, (SPPtrOrD_t)doubleVal);
+                SPPtrOrD_t dt = {.asDouble = doubleVal};
+    			kv_push(SPPtrOrD_t, ptrs, dt);
     		}
     	} else {
     		strVal = RedisModule_Strdup(RedisModule_StringPtrLen(valArg , NULL));
-    		kv_push(SPPtrOrD_t, ptrs, (SPPtrOrD_t)strVal);
+            SPPtrOrD_t dt = {.asChar = strVal};
+    		kv_push(SPPtrOrD_t, ptrs, dt);
     	}
     }
     if (!errorCondition) {

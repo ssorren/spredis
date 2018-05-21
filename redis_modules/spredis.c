@@ -25,6 +25,27 @@ static RedisModuleType **SPREDISMODULE_TYPES;
 //     return 0;
 // }
 
+int TEST_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
+    // double score;
+    // uint64_t iscore;
+    // // char cscore[8];
+    // union {
+    //     double dValue;
+    //     uint64_t iValue;
+    //     char *cValue;
+    // };
+    // int res =  RedisModule_StringToDouble(argv[1], &dValue);
+    // memcpy((char*)&iscore, (char*)&score, sizeof(double));
+
+    // iscore = (uint64_t)score;
+    // printf("%d, %d, %d\n", sizeof(uint64_t), sizeof(double), sizeof(char));
+    // double target = -100;
+    // double cmpscore = ((double*)cscore)[0];
+    RedisModule_ReplyWithLongLong(ctx, 1);
+    return REDISMODULE_OK;
+}
+
 int HASH_NOT_EMPTY_AND_WRONGTYPE(RedisModuleKey *key, int *type, int targetType) {
     int keyType = RedisModule_KeyType(key);
     (*type) = keyType;
@@ -302,6 +323,10 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     // }
 
     if (SpredisInitDocumentCommands(ctx) != REDISMODULE_OK) return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx,"spredis.test",
+        TEST_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
 
     /* support commands */
     if (RedisModule_CreateCommand(ctx,"spredis.storerangebyscore",

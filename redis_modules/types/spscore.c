@@ -55,7 +55,7 @@ void SpredisZSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *va
         char ress[32];
         sprintf(ress, "%" PRIx64, id);
         char dbl[50];
-        sprintf(dbl, "%1.17g" , (double)val);
+        sprintf(dbl, "%1.17g" , val.asDouble);
         RedisModule_EmitAOF(aof,"spredis.zadd","scc", key, ress, dbl);
     });
 }
@@ -89,15 +89,16 @@ void SpredisZSetFreeCallback(void *value) {
 
 int SPScorePutValue(SPScoreCont *cont, spid_t id, double val) {
 	SpredisProtectWriteMap(cont);//, "SPScorePutValue");
-
-    SPAddScoreToSet(cont->btree, cont->st, id, (SPPtrOrD_t)val);
+    SPPtrOrD_t value = {.asDouble = val};
+    SPAddScoreToSet(cont->btree, cont->st, id, value);
     SpredisUnProtectMap(cont);//, "SPScorePutValue");
 	return 1;
 }
 
 int SPScoreDel(SPScoreCont *cont, spid_t id, double val) {
 	SpredisProtectWriteMap(cont);//, "SPScoreDel");
-    SPRemScoreFromSet(cont->btree, cont->st, id, (SPPtrOrD_t)val);
+    SPPtrOrD_t value = {.asDouble = val};
+    SPRemScoreFromSet(cont->btree, cont->st, id, value);
 	
     SpredisUnProtectMap(cont);//, "SPScoreDel");
 	return 1;
@@ -226,7 +227,7 @@ int SpredisZScoreLinkSet_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
 
     SpredisProtectReadMap(cont);//, "SpredisZScoreLinkSet_RedisCommand");
     SPScoreSetKey *p;
-    SPScoreSetKey search = {.value = (SPPtrOrD_t)value};
+    SPScoreSetKey search = {.value.asDouble = value};
     SpredisSetCont *result;
     p = kb_getp(SCORESET, cont->btree, &search);
     

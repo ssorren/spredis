@@ -13,9 +13,9 @@ void SP_PACK(const char *doc, SPLZWCont *lzw) {
     lzw->oSize = strlen(doc);
     int cSize;
     int dstCapacity = LZ4_COMPRESSBOUND(lzw->oSize);
-    char *dst = RedisModule_Alloc(sizeof(char) * dstCapacity);
+    char *dst = RedisModule_Alloc(dstCapacity);
     cSize = LZ4_compress_fast(doc, dst, lzw->oSize, dstCapacity, SP_ACCELERATION_FACTOR);
-    lzw->packed = RedisModule_Alloc((cSize + 1) * sizeof(char));
+    lzw->packed = RedisModule_Alloc(cSize + 1);
     lzw->packed[cSize] = 0; //null the last char
     //have to copy to new buffer and destroy the old one otherwise we won't save much memory at all
     memcpy(lzw->packed, dst, cSize);
@@ -24,7 +24,7 @@ void SP_PACK(const char *doc, SPLZWCont *lzw) {
 }
 
 char *SP_UNPACK(SPLZWCont *lzw) {
-    char *res = RedisModule_Alloc(sizeof(char) * (lzw->oSize + 1));
+    char *res = RedisModule_Alloc(lzw->oSize + 1);
     res[lzw->oSize] = 0; //null the last char
     if (!LZ4_decompress_fast(lzw->packed, res, lzw->oSize)) {
         RedisModule_Free(res);
@@ -41,8 +41,9 @@ SPLZWCont *SP_CREATELZW(const char *s) {
 
 void SP_DESTROYLZW(SPLZWCont *lzw) {
     if (lzw != NULL) {
-        if (lzw->packed != NULL) RedisModule_Free(lzw->packed);
+        RedisModule_Free(lzw->packed);
         RedisModule_Free(lzw);
+        // printf("Destroyed\n");
     }
 }
 
@@ -209,24 +210,28 @@ int SpredisDocAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
         dc = RedisModule_ModuleTypeGetValue(key);
     }
     SpredisProtectWriteMap(dc);//, "SpredisDocAdd_RedisCommand");
-    khint_t k;
+    khint_t k, k2;
     spid_t rid;
     int absent;
     k = kh_get(DOCID, dc->idMap, stringId);
 
     if (k != kh_end(dc->idMap)) {
+        // printf("%s\n", "exists");
         rid = kh_value(dc->idMap, k);
     } else {
+        // printf("%s\n", "creating new");
         rid = _SPNewRecordId(dc);
         stringId = RedisModule_Strdup(stringId);
         k = kh_put(DOCID, dc->idMap, stringId, &absent);
         kh_value(dc->idMap, k) = rid;
-        k = kh_put(RID, dc->revId, rid, &absent);
-        kh_value(dc->revId, k) = stringId;
+        k2 = kh_put(RID, dc->revId, rid, &absent);
+        kh_value(dc->revId, k2) = stringId;
     }
     k = kh_put(LZW, dc->documents, rid, &absent);
     if (!absent) {
-        SP_DESTROYLZW(kh_value(dc->documents, k));
+        // printf("Destroying LZW\n");
+        SPLZWCont *c = kh_value(dc->documents, k); 
+        SP_DESTROYLZW(c);
     }
     kh_value(dc->documents, k) = SP_CREATELZW(data);
     RedisModule_ReplyWithArray(ctx, 2);
@@ -235,7 +240,9 @@ int SpredisDocAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     char ress[32];
     sprintf(ress, "%" PRIx64, rid);
     RedisModule_ReplyWithStringBuffer(ctx, ress, strlen(ress));
+    // printf("%s, %s %lu\n", stringId, ress, strlen(ress));
     SpredisUnProtectMap(dc);//, "SpredisDocAdd_RedisCommand");
+    RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;
 }
 
@@ -283,6 +290,7 @@ int SpredisDocRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
         RedisModule_ReplyWithLongLong(ctx, 0);
     }
     SpredisUnProtectMap(dc);//, "SpredisDocRem_RedisCommand");
+    RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;
 }
 

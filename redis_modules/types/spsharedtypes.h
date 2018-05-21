@@ -7,16 +7,23 @@
 #include "../lib/kvec.h"
 
 
-#define SPScoreComp(a,b) (((double)(a).score < (double)(b).score) ? -1 : (((double)(b).score < (double)(a).score) ? 1 : kb_generic_cmp((a).id, (b).id)))
-#define SPIntScoreComp(a,b) (((uint64_t)(a).score < (uint64_t)(b).score) ? -1 : (((uint64_t)(b).score < (uint64_t)(a).score) ? 1 : kb_generic_cmp((a).id, (b).id)))
+#define SPScoreComp(a,b) (((a).score.asDouble < (b).score.asDouble) ? -1 : (((b).score.asDouble < (a).score.asDouble) ? 1 : kb_generic_cmp((a).id, (b).id)))
+#define SPIntScoreComp(a,b) (((a).score.asInt < (b).score.asInt) ? -1 : (((b).score.asInt < (a).score.asInt) ? 1 : kb_generic_cmp((a).id, (b).id)))
 
-#define SPScoreSetComp(a,b) kb_generic_cmp((double)((a).value), (double)((b).value))
-#define SPGeoSetComp(a,b)  kb_generic_cmp((uint64_t)((a).value), (uint64_t)((b).value))
-#define SPLexSetComp(a,b)  kb_str_cmp((char *)((a).value), (char *)((b).value))
+#define SPScoreSetComp(a,b) kb_generic_cmp(((a).value.asDouble), ((b).value.asDouble))
+#define SPGeoSetComp(a,b)  kb_generic_cmp(((a).value.asInt), ((b).value.asInt))
+#define SPLexSetComp(a,b)  kb_str_cmp(((a).value.asChar), ((b).value.asChar))
 
 typedef uint8_t SPHashValueType;
 typedef uint8_t SPExpResolverType;
-typedef uint64_t SPPtrOrD_t;
+typedef union _SPPtrOrD_t {
+    double asDouble;
+    int64_t asInt;
+    uint64_t asUInt;
+    char *asChar;
+} SPPtrOrD_t;
+
+// typedef uint64_t SPPtrOrD_t;
 typedef kvec_t(SPPtrOrD_t) SPPtrOrD;
 
 
@@ -67,7 +74,7 @@ typedef struct _SPHashValue {
 // extern int SPLexScoreComp(SPScoreKey a, SPScoreKey b);
 
 static inline int SPLexScoreComp(SPScoreKey a, SPScoreKey b) {
-    int res = strcmp((char *)a.score,(char *)b.score);
+    int res = strcmp(a.score.asChar,b.score.asChar);
     return  res ? res : (((a).id < (b).id) ? -1 : (((b).id < (a).id) ? 1 : 0 ));
 }
 

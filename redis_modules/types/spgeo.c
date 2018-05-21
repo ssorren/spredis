@@ -145,8 +145,8 @@ void SpredisZGeoSetFreeCallback(void *value) {
 
 int SPGeoScorePutValue(SPScoreCont *cont, spid_t id, uint16_t pos, double lat, double lon) {
 	SpredisProtectWriteMap(cont);//, "SPGeoScorePutValue");
-    SPPtrOrD_t val = (SPPtrOrD_t)SPGeoHashEncode(lat, lon);
-    SPAddGeoScoreToSet(cont->btree, cont->st, id, (SPPtrOrD_t)val);
+    SPPtrOrD_t val = {.asInt = SPGeoHashEncode(lat, lon)};
+    SPAddGeoScoreToSet(cont->btree, cont->st, id, val);
     SpredisUnProtectMap(cont);//, "SPGeoScorePutValue");
 	return 1;
 }
@@ -154,8 +154,8 @@ int SPGeoScorePutValue(SPScoreCont *cont, spid_t id, uint16_t pos, double lat, d
 
 int SPGeoScoreDel(SPScoreCont *cont, spid_t id, double lat, double lon) {
 	SpredisProtectWriteMap(cont);//,"SPGeoScoreDel");
-    SPPtrOrD_t val = (SPPtrOrD_t)SPGeoHashEncode(lat, lon);
-    SPRemGeoScoreFromSet(cont->btree, cont->st, id, (SPPtrOrD_t)val);
+    SPPtrOrD_t val = {.asInt = SPGeoHashEncode(lat, lon)};
+    SPRemGeoScoreFromSet(cont->btree, cont->st, id, val);
 	SpredisUnProtectMap(cont);//,"SPGeoScoreDel");
 	return 1;
 }
@@ -172,7 +172,7 @@ void SpredisZGeoSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void 
     spid_t id;
     double lat, lon;
     sp_scoreset_each(GEOSET, cont->btree, val, id, {
-        SPGeoHashDecode(val, &lat, &lon);
+        SPGeoHashDecode(val.asInt, &lat, &lon);
         char ress[32];
         sprintf(ress, "%" PRIx64, id);
         char slat[50];

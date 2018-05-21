@@ -63,7 +63,8 @@ void SpredisStoreRangeByRadiusField_Thread(SPStoreRadiusTarg *targ) {
 
     double slat = targ->slat;
     double slon = targ->slon;
-    double radius = DBL_MAX;
+    // double radius = DBL_MAX;
+    SPPtrOrD_t drad;
 
     SPScoreCont *geoCont = targ->geoCont;
     SpredisSetCont *resCont = targ->resCont;
@@ -95,15 +96,16 @@ void SpredisStoreRangeByRadiusField_Thread(SPStoreRadiusTarg *targ) {
         for (; kb_itr_valid(&itr); kb_itr_next(GEOSET, geoTree, &itr)) { // move on
             candKey = (&kb_itr_key(SPScoreSetKey, &itr));
             if (candKey) {
-                SPGeoHashDecode(candKey->value, &lat, &lon);
+                SPGeoHashDecode(candKey->value.asInt, &lat, &lon);
                 distance = SPGetDist(slat, slon, lat, lon);
                 members = candKey->members->set;
                 kh_foreach_key( members , id, {
                     k = kh_get(HASH, radiusCont->set, id);
                     if (k != kh_end(radiusCont->set)) {
                         av = kh_value(radiusCont->set, k);
-                        kv_foreach_hv_value(av, &radius, &pos, {
-                            if (distance <= radius) {
+                        kv_foreach_hv_value(av, &drad, &pos, {
+                            // radius = drad.asDouble;
+                            if (distance <= drad.asDouble) {
                                 kh_put(SIDS, res, id, &absent);
                                 break;
                             }
@@ -125,8 +127,8 @@ void SpredisStoreRangeByRadiusField_Thread(SPStoreRadiusTarg *targ) {
                 k = kh_get(HASH, radiusCont->set, id);
                     if (k != kh_end(radiusCont->set)) {
                     av = kh_value(radiusCont->set, k);
-                    kv_foreach_hv_value(av, &radius, &pos, {
-                        if (distance <= radius) {
+                    kv_foreach_hv_value(av, &drad, &pos, {
+                        if (distance <= drad.asDouble) {
                             kh_put(SIDS, res, id, &absent);
                             break;
                         }
@@ -169,7 +171,7 @@ void SpredisStoreRangeByRadius_Thread(SPStoreRadiusTarg *targ) {
     double lat, lon;
     SPGeoHashArea area, bounds;
     SPGeoSearchAreas areas;
-    uint64_t start, stop;// = SPGeoHashEncodeForRadius(slat, slon, radius, &ghash);
+    int64_t start, stop;// = SPGeoHashEncodeForRadius(slat, slon, radius, &ghash);
     SPGetSearchAreas(slat, slon, radius, &areas, &bounds);
     kbtree_t(GEOSET) *geoTree = geoCont->btree;
     SPScoreSetKey *l, *u, *use, *candKey;
@@ -186,7 +188,7 @@ void SpredisStoreRangeByRadius_Thread(SPStoreRadiusTarg *targ) {
         start = area.hash.bits << (62 - (area.hash.step * 2));
         stop = ++area.hash.bits << (62 - (area.hash.step * 2));
         SPScoreSetKey t = {
-            .value = start
+            .value.asInt = start
         };
         // afound = 0;
         kb_intervalp(GEOSET, geoTree, &t, &l, &u);
@@ -195,9 +197,9 @@ void SpredisStoreRangeByRadius_Thread(SPStoreRadiusTarg *targ) {
         for (; kb_itr_valid(&itr); kb_itr_next(GEOSET, geoTree, &itr)) { // move on
             candKey = (&kb_itr_key(SPScoreSetKey, &itr));
             if (candKey) {
-                if (candKey->value >= start) {
-                    if (candKey->value >= stop) break;
-                    SPGeoHashDecode(candKey->value, &lat, &lon);
+                if (candKey->value.asInt >= start) {
+                    if (candKey->value.asInt >= stop) break;
+                    SPGeoHashDecode(candKey->value.asInt, &lat, &lon);
                     if (SP_INBOUNDS(lat, lon, bounds) && SPGetDist(slat, slon, lat, lon) <= radius) {
                         SPAddAllToSet(res, candKey, hint);
                     }
@@ -410,7 +412,7 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
     RedisModule_StringToDouble(RedisModule_CreateString(ctx, ltCmp, strlen(ltCmp)), &max);
     SPScoreSetKey *l, *u, *cand;
     SPScoreSetKey t = {
-        .value = min
+        .value.asDouble = min
     };
     if (min > DBL_MIN) {
         kb_intervalp(SCORESET, testScore, &t, &l, &u);    
@@ -438,8 +440,8 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
     for (; kb_itr_valid(&itr); kb_itr_next(SCORESET, testScore, &itr)) {
         cand = (&kb_itr_key(SPScoreSetKey, &itr));
         if (cand) {
-            if (reached || GT(cand->value, min)) {
-                if (LT(cand->value, max)) {
+            if (reached || GT(cand->value.asDouble, min)) {
+                if (LT(cand->value.asDouble, max)) {
                     reached = 1;
                     SPAddAllToSet(res, cand, hint);
                 } else {
@@ -557,7 +559,7 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     kbitr_t itr;
 
     SPScoreSetKey t = {
-        .value = (uint64_t)gtCmp
+        .value.asChar = (char *)gtCmp
     };
     SPUnlockContext(ctx);
     
@@ -576,8 +578,8 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     for (; kb_itr_valid(&itr); kb_itr_next(LEXSET, testLex, &itr)) { // move on
         cand = &kb_itr_key(SPScoreSetKey, &itr);
         if (cand) {
-            if (reached || GT(memcmp(gtCmp, (const unsigned char *)cand->value, gtLen ))) {
-                if (LT(memcmp((const unsigned char *)cand->value,ltCmp , ltLen ))) {
+            if (reached || GT(memcmp(gtCmp, (const unsigned char *)cand->value.asChar, gtLen ))) {
+                if (LT(memcmp((const unsigned char *)cand->value.asChar,ltCmp , ltLen ))) {
                     reached = 1;
                     SPAddAllToSet(res, cand, hint);
                 } else {

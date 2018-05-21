@@ -57,7 +57,8 @@ int SpredisFacetRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **arg
 	size_t dSize = res->size;
 	khint_t k;
 	SPHashValue *av;
-	double itemVal;
+	// double itemVal;
+	SPPtrOrD_t itemVal;
 	uint16_t pos = 0;
 	while(dSize) {
 		d = datas[--dSize];
@@ -70,7 +71,7 @@ int SpredisFacetRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **arg
 				av = kh_value(facet->field->set, k);
 				if (av != NULL && av->type == SPHashDoubleType) {
 			    	kv_foreach_hv_value(av, &itemVal, &pos, {
-				    	if (SP_ISBETWEEN(itemVal, facet->min, facet->max, facet->minExcl, facet->maxExcl)) {
+				    	if (SP_ISBETWEEN(itemVal.asDouble, facet->min, facet->max, facet->minExcl, facet->maxExcl)) {
 				    		facet->count += 1;
 				    		break;
 				    	}

@@ -316,15 +316,16 @@ int SpredisSetAdd_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, i
    // printf("%s\n", "WTF4");
     
     RedisModule_ReplyWithLongLong(ctx, setCount);
-    SPLockContext(ctx);
-    RedisModule_ReplicateVerbatim(ctx);
-    SPUnlockContext(ctx);
+    // SPLockContext(ctx);
+    // RedisModule_ReplicateVerbatim(ctx);
+    // SPUnlockContext(ctx);
     // printf("%s\n", "WTF5");
     return REDISMODULE_OK;
 }
 
 int SpredisSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (argc < 3) return RedisModule_WrongArity(ctx);
+    RedisModule_ReplicateVerbatim(ctx);
     return SPThreadedWork(ctx, argv, argc, SpredisSetAdd_RedisCommandT);
 }
 int SpredisSetCard_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {

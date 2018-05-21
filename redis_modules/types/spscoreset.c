@@ -19,28 +19,38 @@
     SP_FREE_SCORESET_KEY(key)
 
 
-#define SP_DOADD_SCORESET_AUX(type, ss, st, id, value, dup, resort) { \
-    SPScoreSetKey ___search = {.value = (SPPtrOrD_t)(value)}; \
+#define SP_DOADD_SCORESET_PTR(type, ss, st, id, value, resort) { \
+    SPScoreSetKey ___search = {.value = (value)}; \
     SPScoreSetKey *___key = kb_getp(type, ss, &___search); \
-    SPScoreSetKey __create; \
     int absent; \
     if (___key == NULL) { \
-       	if (dup) { \
-            const char *__lexVal = RedisModule_Strdup((char *)(value)); \
-            __create.value = (SPPtrOrD_t)__lexVal; \
-            __create.members = RedisModule_Calloc(1, sizeof(SPScoreSetMembers)); \
-            __create.members->set = kh_init(SIDS); \
-            ___key = &__create; \
-            ___key->members->score = 0; /* score will be added later on apply sort */ \
-            if (resort != NULL) *(resort) = 1; \
-	    } else { \
-            __create.value = (value); \
-            __create.members = RedisModule_Calloc(1, sizeof(SPScoreSetMembers)); \
-            __create.members->set = kh_init(SIDS); \
-            ___key = &__create; \
-            ___key->members->score = (value); \
-            if (resort != NULL) *(resort) = 0; \
-	    } \
+        SPScoreSetKey __create; \
+        __create.value.asChar = (char *)RedisModule_Strdup((value).asChar); \
+        __create.members = RedisModule_Calloc(1, sizeof(SPScoreSetMembers)); \
+        __create.members->set = kh_init(SIDS); \
+        ___key = &__create; \
+        ___key->members->score = 0; /* score will be added later on apply sort */ \
+        if (resort != NULL) *(resort) = 1; \
+        kb_putp(type, ss, ___key); \
+    } \
+    kh_put(SIDS, ___key->members->set, (id), &absent); \
+    if (st != NULL) { \
+        khint_t ___k = kh_put(SORTTRACK, (st), (id), &absent);\
+        kh_value((st), ___k) = ___key->members; \
+    } \
+}
+
+#define SP_DOADD_SCORESET_AUX(type, ss, st, id, value) { \
+    SPScoreSetKey ___search = {.value = (value)}; \
+    SPScoreSetKey *___key = kb_getp(type, ss, &___search); \
+    int absent; \
+    if (___key == NULL) { \
+        SPScoreSetKey __create; \
+        __create.value = (value); \
+        __create.members = RedisModule_Calloc(1, sizeof(SPScoreSetMembers)); \
+        __create.members->set = kh_init(SIDS); \
+        ___key = &__create; \
+        ___key->members->score = (value).asDouble; \
         kb_putp(type, ss, ___key); \
     } \
     kh_put(SIDS, ___key->members->set, (id), &absent); \
@@ -51,8 +61,9 @@
 }
 
 
-#define SP_DOADD_SCORESET(type, ss, st, id, value) SP_DOADD_SCORESET_AUX(type, ss, st, id, value, 0, (int *)NULL)
-#define SP_DOADD_LEXSET(type, ss, st, id, value, vresort) SP_DOADD_SCORESET_AUX(type, ss, st, id, value, 1, (int *)vresort)
+
+#define SP_DOADD_SCORESET(type, ss, st, id, value) SP_DOADD_SCORESET_AUX(type, ss, st, id, value)
+#define SP_DOADD_LEXSET(type, ss, st, id, value, vresort) SP_DOADD_SCORESET_PTR(type, ss, st, id, value, (int *)vresort)
 
 #define SP_DEL_SCORESET_KEY(key, search) \
         SPScoreSetMembers *___mems = (key)->members; \
@@ -63,7 +74,7 @@
         }
 
 #define SP_DEL_LEXSET_KEY(key, search) \
-        void *___ptr = (void *)(key)->value; \
+        void *___ptr = (key)->value.asChar; \
         SPScoreSetMembers *___mems = ___key->members; \
         kb_delp(LEXSET, ss, (search)); \
         if (___ptr) RedisModule_Free(___ptr); \
@@ -82,7 +93,7 @@
         }
 
 #define SP_DOREM_SCORESET(type, ss, st, id, value) { \
-    SPScoreSetKey ___search = {.value = (SPPtrOrD_t)(value)}; \
+    SPScoreSetKey ___search = {.value = (value)}; \
     SPScoreSetKey *___key = kb_getp(type, ss, &___search); \
     if (___key != NULL) { \
     	/*if (___key->members->singleId == (id)) ___key->members->singleId = 0;*/ \
@@ -179,7 +190,7 @@ void SPDestroyLexScoreSet(kbtree_t(SCORESET) *ss)
     kb_itr_first(SCORESET, ss, &itr); // get an iterator pointing to the first
     for (; kb_itr_valid(&itr); kb_itr_next(SCORESET, ss, &itr)) { // move on
         p = &kb_itr_key(SPScoreSetKey, &itr);
-        if (p->value) RedisModule_Free((char *)p->value);
+        if (p->value.asChar) RedisModule_Free(p->value.asChar);
         if (p->members) {
             kh_destroy(SIDS, p->members->set); \
             RedisModule_Free(p->members); \
@@ -204,7 +215,7 @@ void SPWriteScoreSetToRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss) {
     kb_itr_first(SCORESET, ss, &itr); // get an iterator pointing to the first
     for (; kb_itr_valid(&itr); kb_itr_next(SCORESET, ss, &itr)) { // move on
         p = &kb_itr_key(SPScoreSetKey, &itr);
-        RedisModule_SaveDouble(io, (double)p->value);
+        RedisModule_SaveDouble(io, p->value.asDouble);
         size_t count = 0;
         // if (p->members->singleId) count++;
         if (p->members->set) count += kh_size(p->members->set);
@@ -226,7 +237,7 @@ void SPWriteLexSetToRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss) {
     kb_itr_first(LEXSET, ss, &itr); // get an iterator pointing to the first
     for (; kb_itr_valid(&itr); kb_itr_next(LEXSET, ss, &itr)) { // move on
         p = &kb_itr_key(SPScoreSetKey, &itr);
-        const char *key = (char *)p->value;
+        char *key = p->value.asChar;
         RedisModule_SaveStringBuffer(io, key, strlen(key));
         size_t count = 0;
         // if (p->members->singleId) count++;
@@ -251,7 +262,7 @@ void SPReadScoreSetFromRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss, khash_t(SO
     size_t count = RedisModule_LoadUnsigned(io);
     for (size_t i = 0; i < count; ++i)
     {
-        SPPtrOrD_t key = (SPPtrOrD_t)RedisModule_LoadDouble(io);
+        SPPtrOrD_t key = {.asDouble = RedisModule_LoadDouble(io)};
         size_t keyCount = RedisModule_LoadUnsigned(io);
         for (size_t k = 0; k < keyCount; ++k)
         {
@@ -266,7 +277,8 @@ void SPReadLexSetFromRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss, khash_t(SORT
     for (size_t i = 0; i < count; ++i)
     {
         RedisModuleString *s = RedisModule_LoadString(io);
-        SPPtrOrD_t key = (SPPtrOrD_t)RedisModule_StringPtrLen(s, NULL);
+        SPPtrOrD_t key;
+        key.asChar = (char *)RedisModule_StringPtrLen(s, NULL);
         size_t keyCount = RedisModule_LoadUnsigned(io);
         for (size_t k = 0; k < keyCount; ++k)
         {
