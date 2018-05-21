@@ -21,6 +21,7 @@ typedef union _SPPtrOrD_t {
     int64_t asInt;
     uint64_t asUInt;
     char *asChar;
+    int asDumbInt;
 } SPPtrOrD_t;
 
 // typedef uint64_t SPPtrOrD_t;

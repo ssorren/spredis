@@ -62,16 +62,16 @@ int main() {
 #define kv_max(v) ((v).m)
 
 /* modified to zero fill the empty portion of the array */
-#define kv_resize_bad(type, v, s)  do { \
+#define kv_resize(type, v, s)  do { \
 	(v).a = (type*)RedisModule_Realloc((v).a, sizeof(type) * (s)); \
 	for (size_t i = ((v).m); i < (s); ++i) \
 	{ \
-		(v).a[i] = 0; \
+		(v).a[i] = (type)0; \
 	} \
 	(v).m = (s); \
 } while(0)
 
-#define kv_resize(type, v, s)  ((v).m = (s), (v).a = (type*)RedisModule_Realloc((v).a, sizeof(type) * (v).m))
+#define kv_resize_bad(type, v, s)  ((v).m = (s), (v).a = (type*)RedisModule_Realloc((v).a, sizeof(type) * (v).m))
 
 /* 	begin spredis additions, don't hope to use these stand alone unless you understand sphash.c...
 	using an additional 'used' array to determine which indeces have values
