@@ -74,8 +74,8 @@ void SPThreadedSort_FreeArg(SPThreadedSortArg *targ)
     RedisModule_Free(targ);
 }
 
-void _SPResolveScore(double value, void *input, double *score) {
-    (*score) = value; //((k[0] == kh_end(set) ? -HUGE_VAL : kh_val(set, k[0])->score)) * order[0];
+void _SPResolveScore(SPPtrOrD_t value, void *input, double *score) {
+    (*score) = value.asDouble; //((k[0] == kh_end(set) ? -HUGE_VAL : kh_val(set, k[0])->score)) * order[0];
 }
 
 void SPPopulateScores(void *arg) {

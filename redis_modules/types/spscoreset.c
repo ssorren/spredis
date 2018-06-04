@@ -29,7 +29,7 @@
         __create.members = RedisModule_Calloc(1, sizeof(SPScoreSetMembers)); \
         __create.members->set = kh_init(SIDS); \
         ___key = &__create; \
-        ___key->members->score = 0; /* score will be added later on apply sort */ \
+        ___key->members->score.asDouble = 0; /* score will be added later on apply sort */ \
         if (resort != NULL) *(resort) = 1; \
         kb_putp(type, ss, ___key); \
     } \
@@ -50,7 +50,7 @@
         __create.members = RedisModule_Calloc(1, sizeof(SPScoreSetMembers)); \
         __create.members->set = kh_init(SIDS); \
         ___key = &__create; \
-        ___key->members->score = (value).asDouble; \
+        ___key->members->score = (value); \
         kb_putp(type, ss, ___key); \
     } \
     kh_put(SIDS, ___key->members->set, (id), &absent); \

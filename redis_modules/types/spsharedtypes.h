@@ -106,7 +106,7 @@ KHASH_DECLARE(SCORE, spid_t, SPScore*);
 //     khash_t(SIDS) *set;
 // } SPLexSetKey;
 typedef struct _SPScoreSetMembers {
-    double score;
+    SPPtrOrD_t score;
     // spid_t singleId; /* memory saver, if we come accross a lot of values where ther is only one member of the set, we'll use this single id*/
     khash_t(SIDS) *set;
 } SPScoreSetMembers;

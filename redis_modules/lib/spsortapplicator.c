@@ -82,7 +82,7 @@ void *SPSortQApplyThread(void *x_void_ptr) {
 		    while (kb_itr_valid(&itr)) {
 		        skey = &kb_itr_key(SPScoreSetKey, &itr);
 		        if (skey != NULL && skey->members != NULL) {
-		        	skey->members->score = ++newScore;        	
+		        	skey->members->score.asDouble = ++newScore;        	
 		        }
 				kb_itr_next(LEXSET, SPRESORTQ->resorting->btree, &itr);
 		    }

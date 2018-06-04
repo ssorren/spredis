@@ -145,7 +145,7 @@ void SpredisZGeoSetFreeCallback(void *value) {
 
 int SPGeoScorePutValue(SPScoreCont *cont, spid_t id, uint16_t pos, double lat, double lon) {
 	SpredisProtectWriteMap(cont);//, "SPGeoScorePutValue");
-    SPPtrOrD_t val = {.asUInt = SPGeoHashEncode(lat, lon)};
+    SPPtrOrD_t val = {.asUInt = (uint64_t)SPGeoHashEncode(lat, lon)};
     SPAddGeoScoreToSet(cont->btree, cont->st, id, val);
     SpredisUnProtectMap(cont);//, "SPGeoScorePutValue");
 	return 1;
@@ -154,7 +154,7 @@ int SPGeoScorePutValue(SPScoreCont *cont, spid_t id, uint16_t pos, double lat, d
 
 int SPGeoScoreDel(SPScoreCont *cont, spid_t id, double lat, double lon) {
 	SpredisProtectWriteMap(cont);//,"SPGeoScoreDel");
-    SPPtrOrD_t val = {.asUInt = SPGeoHashEncode(lat, lon)};
+    SPPtrOrD_t val = {.asUInt = (uint64_t)SPGeoHashEncode(lat, lon)};
     SPRemGeoScoreFromSet(cont->btree, cont->st, id, val);
 	SpredisUnProtectMap(cont);//,"SPGeoScoreDel");
 	return 1;

@@ -21,7 +21,7 @@ typedef struct SpredisColumnData {
     khash_t(SORTTRACK) **sets;
     int *orders;
     void **inputs;
-    void (**resolve)(double , void *, double *);
+    void (**resolve)(SPPtrOrD_t , void *, double *);
     int colCount;
     double *max;
     double *min;

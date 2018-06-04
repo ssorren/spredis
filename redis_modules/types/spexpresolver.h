@@ -11,10 +11,10 @@ typedef struct _SpExpResolverCont {
 	char *keyName;
 	void *keyData;
 	void *input;
-	void (*resolve)(double, void *, double *);
+	void (*resolve)(SPPtrOrD_t, void *, double *);
 } SpExpResolverCont;
 
-void SPResolveGeoScore(double, void *, double *);
+void SPResolveGeoScore(SPPtrOrD_t, void *, double *);
 void SpredisExpRslvrDBSave(RedisModuleIO *io, void *ptr);
 void SpredisExpRslvrRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value);
 void *SpredisExpRslvrRDBLoad(RedisModuleIO *io, int encver);

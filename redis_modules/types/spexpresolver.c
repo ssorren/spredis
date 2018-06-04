@@ -1,10 +1,10 @@
 #include "../spredis.h"
 #include <math.h>
 
-void SPResolveGeoScore(double value, void *input, double *score) {
+void SPResolveGeoScore(SPPtrOrD_t value, void *input, double *score) {
 	double *latlon = input;
 	double slat,slon;
-	SPGeoHashDecode(value, &slat, &slon);
+	SPGeoHashDecode(value.asUInt, &slat, &slon);
     (*score) = SPGetDist(slat, slon, latlon[0], latlon[1]);
 }
 

@@ -122,7 +122,7 @@ void SpredisStoreRangeByRadiusField_Thread(SPStoreRadiusTarg *targ) {
         kh_foreach_key(hint , id, {
             k = kh_get(SORTTRACK, st, id);
             if (k != kh_end(st)) {
-                SPGeoHashDecode((kh_value(st, k))->score, &lat, &lon);
+                SPGeoHashDecode((kh_value(st, k))->score.asUInt, &lat, &lon);
                 distance = SPGetDist(slat, slon, lat, lon);
                 k = kh_get(HASH, radiusCont->set, id);
                     if (k != kh_end(radiusCont->set)) {
