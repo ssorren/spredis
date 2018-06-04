@@ -464,11 +464,16 @@ RedisModuleString * SP_RESOLVE_WILDCARD(RedisModuleCtx *ctx, RedisModuleString *
     // is this a wildcard? look for \xff at the end of the string
     // redis is not converting this character for us unfortunately
     size_t len;
+
     const char *str = RedisModule_StringPtrLen(string,&len);
+
+    printf("%s, len=%zu\n", str, len);
     if(len > 4 && !strcmp(str + len - 4, "\\xff")) {
+        printf("have a wild card%s, len=%zu\n", str, len);
         char *new_str = RedisModule_Calloc(len - 3, sizeof(char));
         strncpy(new_str, str, len - 4);
         string = RedisModule_CreateStringPrintf(ctx, "%s%c", new_str ,0xff);
+        printf("have a wild card %s\n", new_str);
         RedisModule_Free(new_str);
     }
     return string;
@@ -507,6 +512,7 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     }
 
     const unsigned char * gtCmp = (const unsigned char *)RedisModule_StringPtrLen(argv[4], NULL);
+
     const unsigned char * ltCmp = (const unsigned char *)RedisModule_StringPtrLen(SP_RESOLVE_WILDCARD(ctx, argv[5]), NULL);
 
     int (*GT)(int) = SP_LEXGTCMP(gtCmp);
@@ -514,6 +520,8 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
 
     gtCmp = SP_ARG_MINUS_INC_EXC(gtCmp);
     ltCmp = SP_ARG_MINUS_INC_EXC(ltCmp);
+
+    printf("gtCmp = %s\n", gtCmp);
 
     size_t gtLen = strlen((const char *)gtCmp);
     size_t ltLen = strlen((const char *)ltCmp);
@@ -568,7 +576,7 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
 
     kb_intervalp(LEXSET, testLex, &t, &l, &u);
     
-
+    printf("interval? %d, %d\n", l == NULL, u == NULL);
     int reached = 0;
     if (l != NULL) {
         kb_itr_getp(LEXSET, testLex, l, &itr); // get an iterator pointing to the first    
@@ -578,8 +586,11 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     for (; kb_itr_valid(&itr); kb_itr_next(LEXSET, testLex, &itr)) { // move on
         cand = &kb_itr_key(SPScoreSetKey, &itr);
         if (cand) {
+            printf("GT? %s\n", cand->value.asChar);
             if (reached || GT(memcmp(gtCmp, (const unsigned char *)cand->value.asChar, gtLen ))) {
+                printf("GT 1 %s\n", cand->value.asChar);
                 if (LT(memcmp((const unsigned char *)cand->value.asChar,ltCmp , ltLen ))) {
+                    printf("LT 1 %s\n", cand->value.asChar);
                     reached = 1;
                     SPAddAllToSet(res, cand, hint);
                 } else {
