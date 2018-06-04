@@ -1,6 +1,6 @@
 {
   "name": "spredis",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "JSON Document based search engine, built on redis. (pre-alpha)",
   "main": "index.js",
   "scripts": {
