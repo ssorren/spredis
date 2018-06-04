@@ -8,10 +8,10 @@
 
 
 #define SPScoreComp(a,b) (((a).score.asDouble < (b).score.asDouble) ? -1 : (((b).score.asDouble < (a).score.asDouble) ? 1 : kb_generic_cmp((a).id, (b).id)))
-#define SPIntScoreComp(a,b) (((a).score.asInt < (b).score.asInt) ? -1 : (((b).score.asInt < (a).score.asInt) ? 1 : kb_generic_cmp((a).id, (b).id)))
+#define SPIntScoreComp(a,b) (((a).score.asUInt < (b).score.asUInt) ? -1 : (((b).score.asUInt < (a).score.asUInt) ? 1 : kb_generic_cmp((a).id, (b).id)))
 
 #define SPScoreSetComp(a,b) kb_generic_cmp(((a).value.asDouble), ((b).value.asDouble))
-#define SPGeoSetComp(a,b)  kb_generic_cmp(((a).value.asInt), ((b).value.asInt))
+#define SPGeoSetComp(a,b)  kb_generic_cmp(((a).value.asUInt), ((b).value.asUInt))
 #define SPLexSetComp(a,b)  kb_str_cmp(((a).value.asChar), ((b).value.asChar))
 
 typedef uint8_t SPHashValueType;

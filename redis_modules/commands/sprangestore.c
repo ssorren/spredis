@@ -96,7 +96,7 @@ void SpredisStoreRangeByRadiusField_Thread(SPStoreRadiusTarg *targ) {
         for (; kb_itr_valid(&itr); kb_itr_next(GEOSET, geoTree, &itr)) { // move on
             candKey = (&kb_itr_key(SPScoreSetKey, &itr));
             if (candKey) {
-                SPGeoHashDecode(candKey->value.asInt, &lat, &lon);
+                SPGeoHashDecode(candKey->value.asUInt, &lat, &lon);
                 distance = SPGetDist(slat, slon, lat, lon);
                 members = candKey->members->set;
                 kh_foreach_key( members , id, {
@@ -188,7 +188,7 @@ void SpredisStoreRangeByRadius_Thread(SPStoreRadiusTarg *targ) {
         start = area.hash.bits << (62 - (area.hash.step * 2));
         stop = ++area.hash.bits << (62 - (area.hash.step * 2));
         SPScoreSetKey t = {
-            .value.asInt = start
+            .value.asUInt = start
         };
         // afound = 0;
         kb_intervalp(GEOSET, geoTree, &t, &l, &u);
@@ -197,9 +197,9 @@ void SpredisStoreRangeByRadius_Thread(SPStoreRadiusTarg *targ) {
         for (; kb_itr_valid(&itr); kb_itr_next(GEOSET, geoTree, &itr)) { // move on
             candKey = (&kb_itr_key(SPScoreSetKey, &itr));
             if (candKey) {
-                if (candKey->value.asInt >= start) {
-                    if (candKey->value.asInt >= stop) break;
-                    SPGeoHashDecode(candKey->value.asInt, &lat, &lon);
+                if (candKey->value.asUInt >= start) {
+                    if (candKey->value.asUInt >= stop) break;
+                    SPGeoHashDecode(candKey->value.asUInt, &lat, &lon);
                     if (SP_INBOUNDS(lat, lon, bounds) && SPGetDist(slat, slon, lat, lon) <= radius) {
                         SPAddAllToSet(res, candKey, hint);
                     }
