@@ -467,13 +467,13 @@ RedisModuleString * SP_RESOLVE_WILDCARD(RedisModuleCtx *ctx, RedisModuleString *
 
     const char *str = RedisModule_StringPtrLen(string,&len);
 
-    printf("%s, len=%zu\n", str, len);
+    SpredisLog(ctx, "%s, len=%zu\n", str, len);
     if(len > 4 && !strcmp(str + len - 4, "\\xff")) {
-        printf("have a wild card%s, len=%zu\n", str, len);
+        SpredisLog(ctx, "have a wild card%s, len=%zu\n", str, len);
         char *new_str = RedisModule_Calloc(len - 3, sizeof(char));
         strncpy(new_str, str, len - 4);
         string = RedisModule_CreateStringPrintf(ctx, "%s%c", new_str ,0xff);
-        printf("have a wild card %s\n", new_str);
+        SpredisLog(ctx, "have a wild card %s\n", new_str);
         RedisModule_Free(new_str);
     }
     return string;
@@ -576,7 +576,7 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
 
     kb_intervalp(LEXSET, testLex, &t, &l, &u);
     
-    printf("interval? %d, %d\n", l == NULL, u == NULL);
+    SpredisLog(ctx, "interval? %d, %d\n", l == NULL, u == NULL);
     int reached = 0;
     if (l != NULL) {
         kb_itr_getp(LEXSET, testLex, l, &itr); // get an iterator pointing to the first    
@@ -586,11 +586,11 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     for (; kb_itr_valid(&itr); kb_itr_next(LEXSET, testLex, &itr)) { // move on
         cand = &kb_itr_key(SPScoreSetKey, &itr);
         if (cand) {
-            printf("GT? %s\n", cand->value.asChar);
+            SpredisLog(ctx, "GT? %s\n", cand->value.asChar);
             if (reached || GT(memcmp(gtCmp, (const unsigned char *)cand->value.asChar, gtLen ))) {
-                printf("GT 1 %s\n", cand->value.asChar);
+                SpredisLog(ctx, "GT 1 %s\n", cand->value.asChar);
                 if (LT(memcmp((const unsigned char *)cand->value.asChar,ltCmp , ltLen ))) {
-                    printf("LT 1 %s\n", cand->value.asChar);
+                    SpredisLog(ctx, "LT 1 %s\n", cand->value.asChar);
                     reached = 1;
                     SPAddAllToSet(res, cand, hint);
                 } else {
