@@ -614,6 +614,10 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     if (SPREDISMODULE_TYPES[SPDOCTYPE] == NULL) return REDISMODULE_ERR;
 
     // if (SPDBLTYPE == NULL) return REDISMODULE_ERR;
+    SPPtrOrD_t ta,tb;
+    ta.asDouble = 2701.32;
+    tb.asInt = ta.asInt;
+    printf("conversion success = %d\n", ta.asDouble == tb.asDouble);
     return REDISMODULE_OK;
 }
 

@@ -17,7 +17,9 @@
 // KHASH_MAP_INIT_INT64(FHASH, SPHashValue*);
 
 typedef struct _SPFacetResult {
-	const char *val;
+	SPPtrOrD_t val;
+	// double dkey;
+	SPHashValueType valType;
 	long long count;
 	UT_hash_handle hh;
 } SPFacetResult;
@@ -127,12 +129,14 @@ void SPThreadedFacet(void *arg) {
 	}
 	int keyI;
 	int facetCount = targ->facetCount;
-	SPFacetResult *fm;
+	SPFacetResult *fm = NULL;
 	khint_t k;
-	char *sav;
+	SPPtrOrD_t sav;
+	// char *sav;
 	uint16_t pos = 0;
 	SPPtrOrD_t value;
 	// printf("here?\n");
+	// double key;
 	while(dSize)
 	{
 		keyI = facetCount;
@@ -148,19 +152,36 @@ void SPThreadedFacet(void *arg) {
 			    if (av != NULL && av->type == SPHashStringType) {
 			    	// printf("found av\n");
 			    	kv_foreach_hv_value(av, &value, &pos, {
-			    		sav = value.asChar;
-			    		HASH_FIND_STR(facet->valMap, sav, fm);
+			    		sav = value;
+			    		HASH_FIND_STR(facet->valMap, sav.asChar, fm);
 				    	if (fm) {
 				    		fm->count++;
 				    	} else {
 				    		fm = (SPFacetResult*)RedisModule_Calloc(1, sizeof(SPFacetResult));
+				    		fm->valType = SPHashStringType;
 				    		fm->val = sav;
 				    		fm->count = 1;
-				    		HASH_ADD_KEYPTR( hh, facet->valMap, fm->val, strlen(fm->val), fm );
+				    		HASH_ADD_KEYPTR( hh, facet->valMap, fm->val.asChar, strlen(fm->val.asChar), fm );
 				    	}
 			    	});
 			    } else if (av != NULL && av->type == SPHashDoubleType) {
-
+			    	kv_foreach_hv_value(av, &value, &pos, {
+			    		sav = value;
+			    
+			    		fm = NULL;
+			    		HASH_FIND(hh, facet->valMap, &sav, sizeof(SPPtrOrD_t), fm);
+				    	if (fm) {
+				    		fm->count++;
+				    	} else {
+				    		fm = (SPFacetResult*)RedisModule_Calloc(1, sizeof(SPFacetResult));
+				    		fm->valType = SPHashDoubleType;
+				    		
+				    		fm->val = sav;
+				    		fm->count = 1;
+				    		
+				    		HASH_ADD(hh, facet->valMap, val, sizeof(SPPtrOrD_t), fm);
+				    	}
+			    	});
 			    }
 			}
 		}
@@ -180,15 +201,20 @@ int SPFacetResultCompareLT(SPFacetResult *a, SPFacetResult *b, SPFacetData *face
 	// (((b) < (a)) - ((a) < (b)))
 	if (a->count < b->count) return (facet->order == 1);
 	if (a->count > b->count) return (facet->order == 0);
-	int res = strcasecmp(a->val, b->val);
-	if (res < 0) return (facet->order == 1);
-	if (res > 0) return (facet->order == 0);
+	if (a->valType == SPHashStringType) {
+		int res = strcasecmp(a->val.asChar, b->val.asChar);
+		if (res < 0) return (facet->order == 1);
+		if (res > 0) return (facet->order == 0);
+	} else {
+		if (a->val.asDouble < b->val.asDouble) return (facet->order == 1);
+		if (a->val.asDouble > b->val.asDouble) return (facet->order == 0);
+	}
 	return 0;
 }
 
 int SPFacetResultCompareNameLT(SPFacetResult *a, SPFacetResult *b, SPFacetData *facet) {
 	// (((b) < (a)) - ((a) < (b)))
-	int res = strcasecmp(a->val, b->val);
+	int res = strcasecmp(a->val.asChar, b->val.asChar);
 	if (res < 0) return (facet->order == 1);
 	if (res > 0) return (facet->order == 0);
 	if (a->count < b->count) return (facet->order == 1);
@@ -240,8 +266,15 @@ int SpedisBuildFacetResult(RedisModuleCtx *ctx, SPFacetData** facets, int facetC
 	    for (int k = 0; k < facet->replyCount; ++k)
 	    {
 	    	fr = facet->results[k];
-	    	RedisModule_ReplyWithStringBuffer(ctx, fr->val, strlen(fr->val));
-	    	RedisModule_ReplyWithLongLong(ctx, fr->count);
+	    	if (fr->valType == SPHashStringType) {
+	    		RedisModule_ReplyWithStringBuffer(ctx, fr->val.asChar, strlen(fr->val.asChar));
+		    	RedisModule_ReplyWithLongLong(ctx, fr->count);	
+	    	} else {
+	    		RedisModule_ReplyWithDouble(ctx, fr->val.asDouble);
+		    	RedisModule_ReplyWithLongLong(ctx, fr->count);	
+	    	}
+	    	
+	    	
 	    }
 	}
 	return REDISMODULE_OK;
