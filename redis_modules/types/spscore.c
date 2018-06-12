@@ -41,9 +41,9 @@ void SPScoreContDestroy(SPScoreCont *cont) {
 
 void SpredisZSetRDBSave(RedisModuleIO *io, void *ptr) {
     SPScoreCont *cont = ptr;
-    SpredisProtectReadMap(cont);//,"SpredisZSetRDBSave");
+    // SpredisProtectReadMap(cont);//,"SpredisZSetRDBSave");
     SPWriteScoreSetToRDB(io, cont->btree);
-    SpredisUnProtectMap(cont);//,"SpredisZSetRDBSave");
+    // SpredisUnProtectMap(cont);//,"SpredisZSetRDBSave");
 }
 
 

@@ -38,7 +38,7 @@ int SPHashPutValue(SPHashCont *cont, spid_t id, uint16_t pos, SPPtrOrD_t val) {
 void SpredisHashRDBSave(RedisModuleIO *io, void *ptr) {
 	if (ptr == NULL) return;
 	SPHashCont *cont = ptr;
-	SpredisProtectReadMap(cont);//,"SpredisHashRDBSave");
+	// SpredisProtectReadMap(cont);//,"SpredisHashRDBSave");
 	SPHashValue *hv = NULL;
 	RedisModule_SaveUnsigned(io, kh_size(cont->set));
 	RedisModule_SaveUnsigned(io, cont->valueType);
@@ -60,7 +60,7 @@ void SpredisHashRDBSave(RedisModuleIO *io, void *ptr) {
 			}
 		});
     });
-	SpredisUnProtectMap(cont);//,"SpredisHashRDBSave");
+	// SpredisUnProtectMap(cont);//,"SpredisHashRDBSave");
 }
 
 void SpredisHashRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value) {

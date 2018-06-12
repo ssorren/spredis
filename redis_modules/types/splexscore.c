@@ -40,10 +40,10 @@ void SPLexScoreContDestroy(SPScoreCont *cont) {
 
 void SpredisZLexSetRDBSave(RedisModuleIO *io, void *ptr) {
     SPScoreCont *cont = ptr;
-    SpredisProtectReadMap(cont);//, "SpredisZLexSetRDBSave");
+    // SpredisProtectReadMap(cont);//, "SpredisZLexSetRDBSave");
     RedisModule_SaveSigned(io, cont->sort);
     SPWriteLexSetToRDB(io, cont->btree);
-    SpredisUnProtectMap(cont);//, "SpredisZLexSetRDBSave");
+    // SpredisUnProtectMap(cont);//, "SpredisZLexSetRDBSave");
 }
 
 

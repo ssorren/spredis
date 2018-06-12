@@ -375,14 +375,14 @@ int SpredisSetMember_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
     SpredisSetCont *dhash = RedisModule_ModuleTypeGetValue(key);
     spid_t id = TOINTID(argv[2],16);
 
-    SpredisProtectReadMap(dhash);//, "SpredisSetMember_RedisCommand");
+    // SpredisProtectReadMap(dhash);//, "SpredisSetMember_RedisCommand");
     // khint_t k = kh_get(SIDS, dhash->set , id);
     if (kh_contains(SIDS, dhash->set, id)) {
         RedisModule_ReplyWithLongLong(ctx,1);
     } else {
         RedisModule_ReplyWithLongLong(ctx,0);
     }
-    SpredisUnProtectMap(dhash);//, "SpredisSetMember_RedisCommand");
+    // SpredisUnProtectMap(dhash);//, "SpredisSetMember_RedisCommand");
 
     // RedisModule_CloseKey(key);
     return REDISMODULE_OK;

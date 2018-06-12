@@ -49,7 +49,7 @@ void SP_DESTROYLZW(SPLZWCont *lzw) {
 
 void SpredisDocRDBSave(RedisModuleIO *io, void *ptr) {
     SPDocContainer *dc = ptr;
-    SpredisProtectReadMap(dc);//, "SpredisDocRDBSave");
+    // SpredisProtectReadMap(dc);//, "SpredisDocRDBSave");
     RedisModule_SaveUnsigned(io, dc->newRecordId);
     RedisModule_SaveUnsigned(io, kh_size(dc->idMap));
 
@@ -72,13 +72,13 @@ void SpredisDocRDBSave(RedisModuleIO *io, void *ptr) {
             // printf("Writing %llu, %s, %zu, %zu\n", rid, strKey, strlen(strKey), strlen(doc));
         }
     }
-    SpredisUnProtectMap(dc);//, "SpredisDocRDBSave");
+    // SpredisUnProtectMap(dc);//, "SpredisDocRDBSave");
 }
 
 void SpredisDocRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value) {
     SPDocContainer *dc = value;
     khint_t k, k2;
-    SpredisProtectReadMap(dc);//, "SpredisDocRewriteFunc");
+    // SpredisProtectReadMap(dc);//, "SpredisDocRewriteFunc");
     for (k = 0; k < kh_end(dc->idMap); ++k) {
         if (kh_exist(dc->idMap, k)) {
             const char* strKey = kh_key(dc->idMap, k);
@@ -89,7 +89,7 @@ void SpredisDocRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *val
             RedisModule_Free(doc);
         }
     }
-    SpredisUnProtectMap(dc);//, "SpredisDocRewriteFunc");
+    // SpredisUnProtectMap(dc);//, "SpredisDocRewriteFunc");
 
 }
 
@@ -314,7 +314,7 @@ int SpredisDocGetByDocID_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **a
     } else {
         dc = RedisModule_ModuleTypeGetValue(key);
     }
-    SpredisProtectReadMap(dc);//, "SpredisDocGetByDocID_RedisCommand");
+    // SpredisProtectReadMap(dc);//, "SpredisDocGetByDocID_RedisCommand");
     khint_t k;
     spid_t rid;
     k = kh_get(DOCID, dc->idMap, stringId);
@@ -334,6 +334,6 @@ int SpredisDocGetByDocID_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **a
     } else {
         RedisModule_ReplyWithNull(ctx);
     }
-    SpredisUnProtectMap(dc);//, "SpredisDocGetByDocID_RedisCommand");
+    // SpredisUnProtectMap(dc);//, "SpredisDocGetByDocID_RedisCommand");
     return REDISMODULE_OK;
 }
