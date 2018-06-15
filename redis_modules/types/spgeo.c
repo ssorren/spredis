@@ -204,9 +204,9 @@ int SpredisZGeoSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **arg
     }
 
     SPScoreCont *dhash = RedisModule_ModuleTypeGetValue(key);
-    SpredisProtectReadMap(dhash);//, "SpredisZGeoSetCard_RedisCommand");
+    // SpredisProtectReadMap(dhash);//, "SpredisZGeoSetCard_RedisCommand");
     RedisModule_ReplyWithLongLong(ctx,kb_size(dhash->btree));
-    SpredisUnProtectMap(dhash);//, "SpredisZGeoSetCard_RedisCommand");
+    // SpredisUnProtectMap(dhash);//, "SpredisZGeoSetCard_RedisCommand");
     // RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }
@@ -318,10 +318,10 @@ int SpredisZGeoSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **ar
         return REDISMODULE_OK;
     }
     SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
-    SpredisProtectReadMap(cont);//, "SpredisZGeoSetScore_RedisCommand");
+    // SpredisProtectReadMap(cont);//, "SpredisZGeoSetScore_RedisCommand");
 
 		RedisModule_ReplyWithNull(ctx);
 
-    SpredisUnProtectMap(cont);//, "SpredisZGeoSetScore_RedisCommand");
+    // SpredisUnProtectMap(cont);//, "SpredisZGeoSetScore_RedisCommand");
     return REDISMODULE_OK;
 }
