@@ -33,6 +33,7 @@ void SPLexScoreContDestroy(SPScoreCont *cont) {
     kh_destroy(SORTTRACK, cont->st);
     SpredisUnProtectMap(cont);//, "SPLexScoreContDestroy");
     pthread_rwlock_destroy(&cont->mutex);
+    // pthread_mutex_destroy(&(cont->sortlock));
     RedisModule_Free(cont);
 }
 
@@ -96,7 +97,7 @@ int SPLexScorePutValue(SPScoreCont *cont, spid_t id, const char *lexValue, int s
 	SpredisProtectWriteMap(cont);//, "SPLexScorePutValue");
     if (sort) cont->sort = sort;
     int resort;
-    SPPtrOrD_t val = {.asChar = (char *)lexValue};
+    SPPtrOrD_t val = {.asChar = lexValue};
     SPAddLexScoreToSet(cont->btree, (sort ? cont->st : NULL), id, val, sort ? &resort : NULL);
     if (sort && resort) {
         SpredisQSort(cont);
@@ -108,7 +109,7 @@ int SPLexScorePutValue(SPScoreCont *cont, spid_t id, const char *lexValue, int s
 
 int SPLexScoreDel(SPScoreCont *cont, spid_t id, const char *lexValue) {
 	SpredisProtectWriteMap(cont);//, "SPLexScoreDel");
-    SPPtrOrD_t val = {.asChar = (char *)lexValue};
+    SPPtrOrD_t val = {.asChar = lexValue};
     // val.asChar = (char *)lexValue;
     SPRemLexScoreFromSet(cont->btree, (cont->sort ? cont->st : NULL), id, val);
 	int res = 0;
@@ -212,7 +213,7 @@ int SpredisZLexLinkSet_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **ar
 
     SpredisProtectReadMap(cont);//, "SpredisZLexLinkSet_RedisCommand");
     SPScoreSetKey *p;
-    SPScoreSetKey search = {.value.asChar = (char *)value};
+    SPScoreSetKey search = {.value.asChar = value};
     // search.value.asChar = (char *)value;
     SpredisSetCont *result;
     p = kb_getp(LEXSET, cont->btree, &search);
@@ -296,9 +297,9 @@ int SpredisZLexSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **arg
     }
 
     SPScoreCont *dhash = RedisModule_ModuleTypeGetValue(key);
-    SpredisProtectReadMap(dhash);//, "SpredisZLexSetCard_RedisCommand");
+    // SpredisProtectReadMap(dhash);//, "SpredisZLexSetCard_RedisCommand");
     RedisModule_ReplyWithLongLong(ctx,kb_size(dhash->btree));
-    SpredisUnProtectMap(dhash);//, "SpredisZLexSetCard_RedisCommand");
+    // SpredisUnProtectMap(dhash);//, "SpredisZLexSetCard_RedisCommand");
     // RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }

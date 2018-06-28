@@ -22,6 +22,7 @@ typedef struct _SPScoreCont {
 	// khash_t(SCORE) *set;
 	int sort;
 	pthread_rwlock_t mutex;
+	// pthread_mutex_t sortlock;
 	kbtree_t(SCORESET) *btree;
 	khash_t(SORTTRACK) *st;
 } SPScoreCont;

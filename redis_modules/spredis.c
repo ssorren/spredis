@@ -229,6 +229,22 @@ void SPThreadedReplyFree(void *arg)
     RedisModule_Free(targ);
 }
 
+KHASH_DECLARE_SET(STR, const char *);
+KHASH_SET_INIT_STR(STR);
+static khash_t(STR) *SP_UNIQUE_STR;
+
+const char *SPUniqStr(const char *str) {
+    if (str == NULL) return NULL;
+    // printf("SP_UNIQUE_STR %d\n", SP_UNIQUE_STR == NULL);
+    khint_t k = kh_get(STR, SP_UNIQUE_STR, str);
+    if (k == kh_end(SP_UNIQUE_STR)) {
+        int a;
+        const char *key = RedisModule_Strdup(str);
+        kh_put(STR, SP_UNIQUE_STR, key, &a);
+        return key;
+    }
+    return kh_key(SP_UNIQUE_STR, k);
+}
 
 void SPThreadedDoWork(void *arg)
 {
@@ -242,7 +258,7 @@ void SPThreadedDoWork(void *arg)
 
 int SPThreadedWork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int (*command)(RedisModuleCtx*, RedisModuleString**, int)) {
     RedisModule_AutoMemory(ctx);
-
+    
     // for (int i = 0; i < argc; ++i)
     // {
         // printf("%s\n", RedisModule_StringPtrLen(argv[0], NULL));
@@ -299,7 +315,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (RedisModule_Init(ctx,"spredis",1,REDISMODULE_APIVER_1)
         == REDISMODULE_ERR) return REDISMODULE_ERR;
-
+    SP_UNIQUE_STR = kh_init(STR);
     SPREDISMODULE_TYPES = RedisModule_Alloc(sizeof(RedisModuleType*) * 128);
     SpredisSortAppInit();
     SpredisTempResultModuleInit();
@@ -498,6 +514,24 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         SpredisDocRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
     
+
+    if (RedisModule_CreateCommand(ctx,"spredis.compadd",
+        SpredisCompSetAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx,"spredis.comprem",
+        SpredisCompSetRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx,"spredis.compcard",
+        SpredisCompSetCard_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+    
+    if (RedisModule_CreateCommand(ctx,"spredis.comprangestore",
+        SpredisCompStoreRange_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    
     RedisModuleTypeMethods rm = {
         .version = REDISMODULE_TYPE_METHOD_VERSION,
         .rdb_load = SpredisTMPResRDBLoad,
@@ -613,11 +647,28 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (SPREDISMODULE_TYPES[SPDOCTYPE] == NULL) return REDISMODULE_ERR;
 
+
+
+    RedisModuleTypeMethods comptm = {
+        .version = REDISMODULE_TYPE_METHOD_VERSION,
+        .rdb_load = SpredisCompSetRDBLoad,
+        .rdb_save = SpredisCompSetRDBSave,
+        .aof_rewrite = SpredisCompSetRewriteFunc,
+        .free = SpredisCompSetFreeCallback
+    };
+
+    SPREDISMODULE_TYPES[SPCOMPTYPE] = RedisModule_CreateDataType(ctx, "SPpCOmTSS",
+        SPREDISDHASH_ENCODING_VERSION, &comptm);
+
+
+    if (SPREDISMODULE_TYPES[SPCOMPTYPE] == NULL) return REDISMODULE_ERR;
+
+    
     // if (SPDBLTYPE == NULL) return REDISMODULE_ERR;
-    SPPtrOrD_t ta,tb;
-    ta.asDouble = 2701.32;
-    tb.asInt = ta.asInt;
-    printf("conversion success = %d\n", ta.asDouble == tb.asDouble);
+    // SPPtrOrD_t ta,tb;
+    // ta.asDouble = 2701.32;
+    // tb.asInt = ta.asInt;
+    // printf("conversion success = %d\n", !-1);
     return REDISMODULE_OK;
 }
 

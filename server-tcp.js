@@ -3,6 +3,7 @@
 
 const cluster = require('cluster');
 const numCPUs = require('os').cpus().length;
+if (numCPUs < 2) numCPUs = 2;
 
 module.exports = function (config) {
   if (cluster.isMaster && numCPUs > 1) {

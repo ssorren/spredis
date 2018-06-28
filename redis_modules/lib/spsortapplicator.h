@@ -7,5 +7,7 @@
 int SpredisSortAppInit();
 void SpredisQSort(SPScoreCont *cont);
 void SpredisDQSort(SPScoreCont *cont);
-
+void SpredisSortWriteLock();
+void SpredisSortReadLock();
+void SpredisSortUnLock();
 #endif

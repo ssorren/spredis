@@ -317,7 +317,7 @@ int SpredisZGeoSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **ar
         // RedisModule_CloseKey(key);
         return REDISMODULE_OK;
     }
-    SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
+    // SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
     // SpredisProtectReadMap(cont);//, "SpredisZGeoSetScore_RedisCommand");
 
 		RedisModule_ReplyWithNull(ctx);

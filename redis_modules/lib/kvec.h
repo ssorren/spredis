@@ -79,7 +79,7 @@ int main() {
 #define kv_set_value(type, used, v, val, pos, do_free)  do { \
 	if (pos >= (v.m)) kv_resize(type, v, pos + 1); \
 	if (pos >= (used.m)) kv_resize(char, used, pos + 1); \
-	if (kv_A(used, pos) == 1 && do_free) RedisModule_Free((kv_A(v, pos)).asChar); \
+	if (kv_A(used, pos) == 1 && do_free) RedisModule_Free((char *)(kv_A(v, pos)).asChar); \
 	kv_A(used, pos) = 1; \
 	kv_A(v, pos) = val; \
 } while(0)
@@ -87,7 +87,7 @@ int main() {
 #define kv_del_value(used, v, pos, do_free, res)  do { \
 	if (pos >= (v.m)) break; \
 	if (pos >= (used.m)) break; \
-	if (kv_A(used, pos) == 1 && do_free) RedisModule_Free((kv_A(v, pos)).asChar); \
+	if (kv_A(used, pos) == 1 && do_free) RedisModule_Free((char *)(kv_A(v, pos)).asChar); \
 	if (kv_A(used, pos) == 1) (*res) += 1; \
 	kv_A(used, pos) = 0; \
 } while(0)

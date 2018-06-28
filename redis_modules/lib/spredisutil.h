@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <errno.h>
+
 // #define R 6371
 typedef struct _SPLatLong {
     double lat;
@@ -37,8 +38,31 @@ static inline double  SPGetDist(double alat, double alon, double blat, double bl
 
 
 
+// #define SpredisProtectWriteMap(map) { \
+//     int ____LOCK_RES = pthread_rwlock_trywrlock(&map->mutex); \
+//     while (____LOCK_RES == EBUSY) { \
+//         printf("Trying to lock again\n"); \
+//          // sleep(1); \
+//         ____LOCK_RES = pthread_rwlock_trywrlock(&map->mutex);\
+//     } \
+// }
+
 #define SpredisProtectWriteMap(map) pthread_rwlock_wrlock(&map->mutex)
+
+// 
+
 #define SpredisProtectReadMap(map) pthread_rwlock_rdlock(&map->mutex)
+
+// #define SpredisProtectReadMap(map) { \
+//     int ____LOCK_RES = pthread_rwlock_tryrdlock(&map->mutex); \
+//     while (____LOCK_RES == EBUSY || ____LOCK_RES == EDEADLK) { \
+//         printf("Trying to lock again, %d\n",____LOCK_RES == EDEADLK); \
+//         // sleep(1); \
+//         ____LOCK_RES = pthread_rwlock_tryrdlock(&map->mutex);\
+//     } \
+// }
+
+
 #define SpredisUnProtectMap(map) pthread_rwlock_unlock(&map->mutex)
 
 typedef struct {

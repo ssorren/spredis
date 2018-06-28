@@ -178,7 +178,7 @@ int SpredisTMPResGetIds_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **ar
         
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
     }
-    SpredisProtectReadMap(dc);//, "SpredisTMPResGetIds_RedisCommand");
+    // SpredisProtectReadMap(dc);//, "SpredisTMPResGetIds_RedisCommand");
     // printf("%s %lld %lld %zu\n", "hmmm", start, count, res->size);
     long long finalCount = 0;    
     SpredisSortData *d;
@@ -194,7 +194,7 @@ int SpredisTMPResGetIds_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **ar
         start++;
     }
     RedisModule_ReplySetArrayLength(ctx, finalCount);
-    SpredisUnProtectMap(dc);//, "SpredisTMPResGetIds_RedisCommand");
+    // SpredisUnProtectMap(dc);//, "SpredisTMPResGetIds_RedisCommand");
     // printf("%s %lld\n", "WTF6", finalCount);
     
     // RedisModule_CloseKey(key);

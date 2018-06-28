@@ -11,6 +11,7 @@ void SPResolveGeoScore(SPPtrOrD_t value, void *input, double *score) {
 
 SpExpResolverCont* _SpredisInitExpRslvr() {
     SpExpResolverCont *res = RedisModule_Calloc(1, sizeof(SpExpResolverCont));
+    res->mutex = (pthread_rwlock_t)PTHREAD_RWLOCK_INITIALIZER;
 	pthread_rwlock_init( &res->mutex,NULL );
 	return res;
 }

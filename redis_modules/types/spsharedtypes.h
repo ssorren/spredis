@@ -14,13 +14,15 @@
 #define SPGeoSetComp(a,b)  kb_generic_cmp(((a).value.asUInt), ((b).value.asUInt))
 #define SPLexSetComp(a,b)  kb_str_cmp(((a).value.asChar), ((b).value.asChar))
 
+
+
 typedef uint8_t SPHashValueType;
 typedef uint8_t SPExpResolverType;
 typedef union _SPPtrOrD_t {
     double asDouble;
     int64_t asInt;
     uint64_t asUInt;
-    char *asChar;
+    const char *asChar;
     int asDumbInt;
 } SPPtrOrD_t;
 
@@ -118,9 +120,10 @@ KHASH_MAP_INIT_INT64(SORTTRACK, SPScoreSetMembers*);
 typedef struct _SPScoreSetKey
 {
     SPPtrOrD_t value;
-    // void *ptrVal;
     SPScoreSetMembers *members;
 } SPScoreSetKey;
+
+
 
 
 

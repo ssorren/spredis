@@ -147,6 +147,7 @@ SPDocContainer *SPDocContainerInit() {
     dc->documents = kh_init(LZW);
     dc->idMap = kh_init(DOCID);
     dc->revId = kh_init(RID);
+    dc->mutex = (pthread_rwlock_t)PTHREAD_RWLOCK_INITIALIZER;
     pthread_rwlock_init ( &dc->mutex, NULL);
     return dc;
 }

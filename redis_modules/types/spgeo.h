@@ -8,11 +8,11 @@
 
 
 // typedef kbitr_t SPScoreIter;
-typedef struct _SPGeoScoreCont {
-	khash_t(SCORE) *set;
-	pthread_rwlock_t mutex;
-	kbtree_t(GEO) *btree;
-} SPGeoScoreCont;
+// typedef struct _SPGeoScoreCont {
+// 	khash_t(SCORE) *set;
+// 	pthread_rwlock_t mutex;
+// 	kbtree_t(GEO) *btree;
+// } SPGeoScoreCont;
 
 typedef struct _SPGeoSearchAreas {
 	SPGeoHashArea area[9];

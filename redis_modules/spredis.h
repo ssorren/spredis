@@ -69,7 +69,8 @@ typedef khint64_t spid_t;
 #define SPGEOTYPE 6
 #define SPEXPRTYPE 7
 #define SPDOCTYPE 8
-#define SPMAXTYPE 9
+#define SPCOMPTYPE 9
+#define SPMAXTYPE 10
 
 #define SET_REDIS_KEY_VALUE_TYPE(key, type, value) RedisModule_ModuleTypeSetValue(key, SPSTRINGTYPE ,dhash);
 
@@ -92,6 +93,7 @@ int SPThreadedWork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int 
 void SpredisDebug(RedisModuleCtx *ctx, const char *fmt,...);
 void SpredisLog(RedisModuleCtx *ctx, const char *fmt,...);
 void SpredisWarn(RedisModuleCtx *ctx, const char *fmt,...);
+const char *SPUniqStr(const char *str);
 
 #define SP_TWORK(f,a, code) {if (SPDoWorkInThreadPool(f,a)) code}
 // void SP_TWORK(void *func, void *arg) {
@@ -114,7 +116,9 @@ void SpredisWarn(RedisModuleCtx *ctx, const char *fmt,...);
 
 
 #include "lib/geohash.h"
+
 #include "types/spsharedtypes.h"
+#include "types/spcomposite.h"
 #include "types/spscoreset.h"
 #include "types/spgeo.h"
 #include "types/spset.h"
@@ -122,6 +126,7 @@ void SpredisWarn(RedisModuleCtx *ctx, const char *fmt,...);
 #include "types/splexscore.h"
 #include "types/sphash.h"
 #include "types/spexpresolver.h"
+#include "commands/spcomprangestore.h"
 #include "commands/spmcsort.h"
 #include "commands/sprangestore.h"
 #include "commands/spfacet.h"

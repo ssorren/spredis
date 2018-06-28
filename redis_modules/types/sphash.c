@@ -5,6 +5,7 @@
 SPHashCont *SpHashContInit(SPHashValueType valueType) {
 	SPHashCont *cont = RedisModule_Calloc(1, sizeof(SPHashCont));
 	cont->set = kh_init(HASH);
+    cont->mutex = (pthread_rwlock_t)PTHREAD_RWLOCK_INITIALIZER;
 	pthread_rwlock_init ( &cont->mutex,NULL );
 	cont->valueType = valueType;
 	return cont;
@@ -31,7 +32,9 @@ int SPHashPutValue(SPHashCont *cont, spid_t id, uint16_t pos, SPPtrOrD_t val) {
 	} else {
 		hashVal = kh_value(cont->set, k);
 	}
-	kv_set_value(SPPtrOrD_t, hashVal->used, hashVal->values, val, pos, (hashVal->type == SPHashStringType));
+    /* don't free anymore, using SPUniqStr*/
+    kv_set_value(SPPtrOrD_t, hashVal->used, hashVal->values, val, pos, 0);
+	// kv_set_value(SPPtrOrD_t, hashVal->used, hashVal->values, val, pos, (hashVal->type == SPHashStringType));
 	return 1;
 }
 
@@ -44,7 +47,7 @@ void SpredisHashRDBSave(RedisModuleIO *io, void *ptr) {
 	RedisModule_SaveUnsigned(io, cont->valueType);
 	uint16_t count = 0, pos = 0;
 	SPPtrOrD_t val;
-	char *sVal;
+	const char *sVal;
     kh_foreach_value(cont->set, hv, {
     	count = 0;
     	RedisModule_SaveUnsigned(io, hv->id);
@@ -66,11 +69,11 @@ void SpredisHashRDBSave(RedisModuleIO *io, void *ptr) {
 void SpredisHashRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value) {
 	if (value == NULL) return;
 	SPHashCont *cont = value;
-	SpredisProtectReadMap(cont);//, "SpredisHashRewriteFunc");
+	// SpredisProtectReadMap(cont);//, "SpredisHashRewriteFunc");
 	SPHashValue *hv = NULL;
 	uint16_t pos = 0;
 	SPPtrOrD_t val;
-	char *sVal;
+	const char *sVal;
     kh_foreach_value(cont->set, hv, {
     	char ress[32];
         sprintf(ress, "%" PRIx64, (uint64_t)hv->id);
@@ -85,7 +88,7 @@ void SpredisHashRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *va
 			}
 		});
     });
-	SpredisUnProtectMap(cont);//, "SpredisHashRewriteFunc");
+	// SpredisUnProtectMap(cont);//, "SpredisHashRewriteFunc");
 }
 
 void *SpredisHashRDBLoad(RedisModuleIO *io, int encver) {
@@ -107,7 +110,9 @@ void *SpredisHashRDBLoad(RedisModuleIO *io, int encver) {
     		uint16_t pos = RedisModule_LoadUnsigned(io);
     		if (cont->valueType == SPHashStringType) {
     			RedisModuleString *s = RedisModule_LoadString(io);
-				val.asChar = RedisModule_Strdup( RedisModule_StringPtrLen(s, NULL));
+
+                val.asChar = SPUniqStr( RedisModule_StringPtrLen(s, NULL));
+				// val.asChar = RedisModule_Strdup( RedisModule_StringPtrLen(s, NULL));
 
                 RedisModule_FreeString(RedisModule_GetContextFromIO(io),s);
 			} else {
@@ -122,16 +127,16 @@ void *SpredisHashRDBLoad(RedisModuleIO *io, int encver) {
 void SpredisHashDestroy(void *value) {
 	if (value == NULL) return;
 	SPHashCont *cont = value;
-	SPPtrOrD_t t;
+	// SPPtrOrD_t t;
 	SPHashValue *hv;
-	uint16_t pos = 0;
+	// uint16_t pos = 0;
 	SpredisProtectWriteMap(cont);//, "SpredisHashDestroy");
 	kh_foreach_value(cont->set, hv, {
-		if (hv->type == SPHashStringType) {
-			kv_foreach_value(hv->used, hv->values, &t, &pos, {
-				RedisModule_Free(t.asChar);
-			});
-		}
+		// if (hv->type == SPHashStringType) {
+		// 	kv_foreach_value(hv->used, hv->values, &t, &pos, {
+		// 		RedisModule_Free(t.asChar);
+		// 	});
+		// }
 		kv_destroy(hv->used);
 		kv_destroy(hv->values);
 		RedisModule_Free(hv);
@@ -187,7 +192,7 @@ int SpredisHashSet(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, SPHa
     int errorCondition = 0;
     RedisModuleString *valArg;
     double doubleVal;
-    char *strVal;
+    const char *strVal;
     for (int i = argOffset; i < argc; )
     {
     	kv_push(spid_t, ids, TOINTKEY(argv[i++]));
@@ -203,7 +208,9 @@ int SpredisHashSet(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, SPHa
     			kv_push(SPPtrOrD_t, ptrs, dt);
     		}
     	} else {
-    		strVal = RedisModule_Strdup(RedisModule_StringPtrLen(valArg , NULL));
+            
+            strVal = SPUniqStr(RedisModule_StringPtrLen(valArg , NULL));
+    		// strVal = RedisModule_Strdup(RedisModule_StringPtrLen(valArg , NULL));
             SPPtrOrD_t dt = {.asChar = strVal};
     		kv_push(SPPtrOrD_t, ptrs, dt);
     	}
@@ -307,7 +314,7 @@ int SpredisHashDel_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, i
     	k = kh_get(HASH, cont->set, id);
     	if (k != kh_end(cont->set) && kh_exist(cont->set, k)) {
     		hv = kh_value(cont->set, k);
-    		kv_del_value(hv->used, hv->values, pos, (cont->valueType == SPHashStringType), &delCount);
+    		kv_del_value(hv->used, hv->values, pos, 0, &delCount);
     		int hasValues = 0;
 	    	kv_used_count(hv->used, &hasValues);
 	    	if (!hasValues) {

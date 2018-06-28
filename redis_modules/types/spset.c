@@ -11,8 +11,8 @@ typedef struct {
 void * _SpredisInitSet() {
 
     SpredisSetCont *cont = RedisModule_Calloc(1, sizeof(SpredisSetCont));
+    cont->mutex = (pthread_rwlock_t)PTHREAD_RWLOCK_INITIALIZER;
     pthread_rwlock_init ( &(cont->mutex),NULL );
-    // pthread_rwlock_init ( &(cont->bigLock),NULL );
     cont->linkedSet = 0;
     cont->set = kh_init(SIDS);
     return cont;
@@ -54,38 +54,22 @@ void SpredisSetRDBSave(RedisModuleIO *io, void *ptr) {
 void SpredisSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value) {
     SpredisSetCont *dhash = value;
     spid_t id;
+    char ress[32];
     kh_foreach_key(dhash->set, id, {
-        char ress[32];
         sprintf(ress, "%" PRIx64, id);
-        // RedisModule_CreateStringPrintf(ctx, "%" PRIx32, id);
         RedisModule_EmitAOF(aof,"spredis.sadd","sc", key, ress);
     });
 }
 
-int SPThreadedSetReply(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
-{
-    // RedisModule_ReplyWithLongLong(ctx, 1);
-    return REDISMODULE_OK;
-    // SPStoreRadiusTarg *targ = RedisModule_GetBlockedClientPrivateData(ctx);
-    // // if (targ->geoCont) SpredisUnProtectMap(targ->geoCont);
-    // // if (targ->hintCont) SpredisUnProtectMap(targ->hintCont);
-    // // if (targ->resCont) SpredisUnProtectMap(targ->resCont);
-    // return RedisModule_ReplyWithLongLong(ctx,targ->reply);
-}
+// int SPThreadedSetReply(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+// {
+//     return REDISMODULE_OK;
+// }
 
-void SPThreadedSetReplyFree(void *arg)
-{
-    // RedisModule_ReplyWithLongLong(ctx, 1);
-    // return REDISMODULE_OK;
-    // SPSetTarg *targ = arg;//RedisModule_GetBlockedClientPrivateData(ctx);
-    // if (targ->argc) {
-        // for (int i = 0; i < targ->argc; ++i)
-        // {
-        //     RedisModule_Free(targ->argv[i]);
-        // }
-    // }
-    RedisModule_Free(arg);
-}
+// void SPThreadedSetReplyFree(void *arg)
+// {
+//     RedisModule_Free(arg);
+// }
 
 void *SpredisSetRDBLoad(RedisModuleIO *io, int encver) {
     if (encver != SPREDISDHASH_ENCODING_VERSION) {
@@ -121,7 +105,7 @@ static inline int SpredisSetLenCompareLT(SpredisSetCont *a, SpredisSetCont *b, v
 
 SPREDIS_SORT_INIT(SpredisSetCont, void, SpredisSetLenCompareLT)
 
-SpredisSetCont *SpredisSIntersect(SpredisSetCont **cas, int count) {
+static SpredisSetCont *SpredisSIntersect(SpredisSetCont **cas, int count) {
     // printf("calling intersect %d\n", count);
     if (count == 0) return NULL;
 
@@ -168,7 +152,7 @@ SpredisSetCont *SpredisSIntersect(SpredisSetCont **cas, int count) {
 }
 
 
-SpredisSetCont *SpredisSDifference(SpredisSetCont **cas, int count) {
+static SpredisSetCont *SpredisSDifference(SpredisSetCont **cas, int count) {
     if (count == 0) return NULL;
     SpredisSetCont *ca = cas[0];
     SpredisSetCont *res;
@@ -221,7 +205,7 @@ SpredisSetCont *SpredisSDifference(SpredisSetCont **cas, int count) {
     return res;
 }
 
-SpredisSetCont *SpredisSUnion(SpredisSetCont **cas, int count) {
+static SpredisSetCont *SpredisSUnion(SpredisSetCont **cas, int count) {
     SpredisSetCont *a;
     khash_t(SIDS) *set;
     SpredisSetCont *res = _SpredisInitSet();
@@ -247,7 +231,7 @@ SpredisSetCont *SpredisSUnion(SpredisSetCont **cas, int count) {
 }
 
 
-SpredisSetCont *SpredisSAddAll(SpredisSetCont **cas, int count) {
+static SpredisSetCont *SpredisSAddAll(SpredisSetCont **cas, int count) {
     SpredisSetCont *a;
     khash_t(SIDS) *set;
 
@@ -275,20 +259,20 @@ SpredisSetCont *SpredisSAddAll(SpredisSetCont **cas, int count) {
     return res;
 }
 
-int SpredisSetAdd_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    
+int SpredisSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    RedisModule_AutoMemory(ctx);
     int argOffset = 2;
     // if ( ((argc - argOffset) % 2) != 0 ) return RedisModule_WrongArity(ctx);
     int keyCount = (argc - argOffset);
     int setCount = 0;
     int argIndex = argOffset;
     // printf("%s\n", "WTF1");
-    SPLockContext(ctx);
+    // SPLockContext(ctx);
     RedisModuleKey *key = RedisModule_OpenKey(ctx,argv[1],
             REDISMODULE_WRITE);
     int keyType;
     if (HASH_NOT_EMPTY_AND_WRONGTYPE(key, &keyType, SPSETTYPE) != 0) {
-        SPUnlockContext(ctx);
+        // SPUnlockContext(ctx);
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);   
     }
     // printf("%s\n", "WTF2");
@@ -299,10 +283,7 @@ int SpredisSetAdd_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, i
     } else {
         dhash = RedisModule_ModuleTypeGetValue(key);
     }
-    SPUnlockContext(ctx);
-    // RedisModule_CloseKey(key);
-    // printf("%s\n", "WTF3");
-    // SpredisDHash *d;
+
     SpredisProtectWriteMap(dhash);//, "SpredisSetAdd_RedisCommand");
     for (int i = 0; i < keyCount; ++i)
     {
@@ -315,20 +296,17 @@ int SpredisSetAdd_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, i
     SpredisUnProtectMap(dhash);//, "SpredisSetAdd_RedisCommand");
    // printf("%s\n", "WTF4");
     
+
     RedisModule_ReplyWithLongLong(ctx, setCount);
-    // SPLockContext(ctx);
-    // RedisModule_ReplicateVerbatim(ctx);
-    // SPUnlockContext(ctx);
-    // printf("%s\n", "WTF5");
+
+
+    RedisModule_ReplicateVerbatim(ctx);
+
     return REDISMODULE_OK;
 }
 
-int SpredisSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    if (argc < 3) return RedisModule_WrongArity(ctx);
-    RedisModule_ReplicateVerbatim(ctx);
-    return SPThreadedWork(ctx, argv, argc, SpredisSetAdd_RedisCommandT);
-}
-int SpredisSetCard_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+
+static int SpredisSetCard_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // printf("Getting %d\n", TOINTKEY(argv[2]));
     // RedisModule_AutoMemory(ctx);
     SPLockContext(ctx);
@@ -435,31 +413,13 @@ void SPSetCommandInit() {
 
 // int SpredisSTempBase_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, SpredisSetCont * (*command)(SpredisSetCont **, int), int stripEmpties, int includeStore) {
 // int SpredisSTempBase_RedisCommandT(void *arg) {
-int SpredisSTempBase_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, SpredisSetCont * (*command)(SpredisSetCont **, int), int stripEmpties, int includeStore) {
-    // SPSetTarg *targ = arg;
-    // RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(targ->bc);
-    // RedisModule_AutoMemory(ctx); //let redis free up our little memories
+static int SpredisSTempBase_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, SpredisSetCont * (*command)(SpredisSetCont **, int), int stripEmpties, int includeStore) {
     SPLockContext(ctx);
-
-    // RedisModuleString **argv = targ->argv;
-    // int argc = targ->argc;
-    // int stripEmpties = targ->stripEmpties;
-    // int includeStore = targ->includeStore;
-    
     int keyCount = argc - 2;
     int i, keyType;
 
-
-    // long long startTimer = RedisModule_Milliseconds(); 
-
     RedisModuleString **keyNames = argv + 2;
-    // RedisModule_PoolAlloc(ctx, sizeof(RedisModuleKey*) *keyCount);
-    // for (int i = 0; i < keyCount; ++i)
-    // {
-    //     printf("\t%s\n", RedisModule_StringPtrLen(keyNames[i], NULL));
-    // }
     RedisModuleString *storeName = argv[1];
-    // printf("\t%s\n", RedisModule_StringPtrLen(storeName, NULL));
     int wrongTypeCondition = 0;
     int emptyCondition = 0;
     RedisModuleKey **keys = RedisModule_Alloc(sizeof(RedisModuleKey*) * (keyCount + includeStore));
@@ -488,7 +448,6 @@ int SpredisSTempBase_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
             break;
         }
     }
-    // RedisModule_ThreadSafeContextUnlock(ctx);
 
     if (!wrongTypeCondition && !emptyCondition) {
         int actualKeyCount = includeStore;
@@ -539,11 +498,6 @@ int SpredisSTempBase_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
         }       
     }
     
-    // RedisModule_CloseKey(store);
-    // for (i = includeStore; i < keyCount + includeStore; ++i)
-    // {
-    //     // RedisModule_CloseKey(keys[i]);
-    // }
     SPUnlockContext(ctx);
     if (wrongTypeCondition) {
         // printf("Wronng type %d\n", 0);
@@ -557,106 +511,40 @@ int SpredisSTempBase_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
     RedisModule_Free(keys);
     RedisModule_Free(sets);
 
-    // RedisModule_FreeThreadSafeContext(ctx);
     return REDISMODULE_OK;
     
 }
 
 
 
-// int SpredisSTempBase_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, SpredisSetCont * (*command)(SpredisSetCont **, int), int stripEmpties, int includeStore) {
-//     RedisModule_AutoMemory(ctx);
-//     if ( argc < 3 ) return RedisModule_WrongArity(ctx);
-
-//     SPSetTarg *targ = RedisModule_Alloc(sizeof(SPSetTarg));
-//     targ->bc = RedisModule_BlockClient(ctx, SPThreadedSetReply /*reply*/, SPThreadedSetReply /*timeout*/, SPThreadedSetReplyFree /*free*/ ,0);
-//     targ->argc = argc;
-//     targ->stripEmpties = stripEmpties;
-//     targ->includeStore = includeStore;
-//     targ->argv = argv;
-//     targ->command = command;
-//     // for (int i = 0; i < argc; ++i)
-//     // {
-//     //     RedisModule_RetainString(ctx, argv[i]);
-//     // }
-//     SPDoWorkInThreadPool(SpredisSTempBase_RedisCommandT, targ);
-//     return REDISMODULE_OK;
-// }
-
-int SpredisSTempInterstore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    // printf("Intersecting...\n");
- //    for (int i = 2; i < argc; ++i)
- //    {
- //        printf("\t%s\n", RedisModule_StringPtrLen(argv[i], NULL));
- //    }
- //    printf("to %s\n", RedisModule_StringPtrLen(argv[1], NULL));
+static int SpredisSTempInterstore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return SpredisSTempBase_RedisCommand(ctx, argv, argc, SpredisSIntersect, 0, 0);
 }
 
-int SpredisSTempDifference_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    // printf("Diffing...\n");
- //    for (int i = 2; i < argc; ++i)
- //    {
- //        printf("\t%s\n", RedisModule_StringPtrLen(argv[i], NULL));
- //    }
- //    printf("to %s\n", RedisModule_StringPtrLen(argv[1], NULL));
+static int SpredisSTempDifference_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return SpredisSTempBase_RedisCommand(ctx, argv, argc, SpredisSDifference, 1, 0);
 }
 
-int SpredisSTempUnion_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    // printf("Union...\n");
- //    for (int i = 2; i < argc; ++i)
- //    {
- //        printf("\t%s\n", RedisModule_StringPtrLen(argv[i], NULL));
- //    }
- //    printf("to %s\n", RedisModule_StringPtrLen(argv[1], NULL));
+static int SpredisSTempUnion_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return SpredisSTempBase_RedisCommand(ctx, argv, argc, SpredisSUnion, 1, 0);
 }
 
-int SpredisSTempAddAll_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    // printf("Adding...\n");
+static int SpredisSTempAddAll_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return SpredisSTempBase_RedisCommand(ctx, argv, argc, SpredisSAddAll, 1, 1);   
 }
 
-
-
-
-
 int SpredisSTempInterstore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    // printf("Intersecting...\n");
- //    for (int i = 2; i < argc; ++i)
- //    {
- //        printf("\t%s\n", RedisModule_StringPtrLen(argv[i], NULL));
- //    }
- //    printf("to %s\n", RedisModule_StringPtrLen(argv[1], NULL));
     return SPThreadedWork(ctx, argv, argc, SpredisSTempInterstore_RedisCommandT);
-//     return SpredisSTempBase_RedisCommand(ctx, argv, argc, SpredisSIntersect, 0, 0);
 }
 
 int SpredisSTempDifference_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    // printf("Diffing...\n");
- //    for (int i = 2; i < argc; ++i)
- //    {
- //        printf("\t%s\n", RedisModule_StringPtrLen(argv[i], NULL));
- //    }
- //    printf("to %s\n", RedisModule_StringPtrLen(argv[1], NULL));
     return SPThreadedWork(ctx, argv, argc, SpredisSTempDifference_RedisCommandT);
-    // return SpredisSTempBase_RedisCommand(ctx, argv, argc, SpredisSDifference, 1, 0);
 }
 
 int SpredisSTempUnion_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    // printf("Union...\n");
- //    for (int i = 2; i < argc; ++i)
- //    {
- //        printf("\t%s\n", RedisModule_StringPtrLen(argv[i], NULL));
- //    }
- //    printf("to %s\n", RedisModule_StringPtrLen(argv[1], NULL));
     return SPThreadedWork(ctx, argv, argc, SpredisSTempUnion_RedisCommandT);
-    // return SpredisSTempBase_RedisCommand(ctx, argv, argc, SpredisSUnion, 1, 0);
 }
 
 int SpredisSTempAddAll_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    // printf("Adding...\n");
     return SPThreadedWork(ctx, argv, argc, SpredisSTempAddAll_RedisCommandT);
-    // return SpredisSTempBase_RedisCommand(ctx, argv, argc, SpredisSAddAll, 1, 1);   
 }

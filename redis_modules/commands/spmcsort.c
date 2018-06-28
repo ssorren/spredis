@@ -123,6 +123,9 @@ void SPThreadedSort(SPThreadedSortArg *targ) {
         d->id = id;
     });
     if (mcd->colCount > 0) {
+        // printf("Locking B\n");
+        SpredisSortReadLock();
+        // printf("Locked B\n");
         if (i < SP_PTHRESHOLD) {
             SPPopScoreArg parg = {.mcd=mcd, .datas=datas, .start=0, .end=i};
             SPPopulateScores(&parg);
@@ -153,6 +156,10 @@ void SPThreadedSort(SPThreadedSortArg *targ) {
                 RedisModule_Free(pargs[j]);
             }
         }
+        // printf("UnLocking B\n");
+        SpredisSortUnLock();
+        // printf("UnLocked B\n");
+
     // printf("%s\n", "WTF3");
     
         SpredisSpredisSortDataSort(targ->count, datas, mcd);    

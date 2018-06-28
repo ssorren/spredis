@@ -25,7 +25,8 @@
     int absent; \
     if (___key == NULL) { \
         SPScoreSetKey __create; \
-        __create.value.asChar = (char *)RedisModule_Strdup((value).asChar); \
+        /*__create.value.asChar = (char *)RedisModule_Strdup((value).asChar);*/ \
+        __create.value.asChar = (char *)SPUniqStr((value).asChar);\
         __create.members = RedisModule_Calloc(1, sizeof(SPScoreSetMembers)); \
         __create.members->set = kh_init(SIDS); \
         ___key = &__create; \
@@ -74,10 +75,10 @@
         }
 
 #define SP_DEL_LEXSET_KEY(key, search) \
-        void *___ptr = (key)->value.asChar; \
+        /*void *___ptr = (key)->value.asChar;*/ \
         SPScoreSetMembers *___mems = ___key->members; \
         kb_delp(LEXSET, ss, (search)); \
-        if (___ptr) RedisModule_Free(___ptr); \
+        /*if (___ptr) RedisModule_Free(___ptr);*/ \
         if (___mems) { \
             kh_destroy(SIDS, ___mems->set); \
             RedisModule_Free(___mems); \
@@ -190,7 +191,8 @@ void SPDestroyLexScoreSet(kbtree_t(SCORESET) *ss)
     kb_itr_first(SCORESET, ss, &itr); // get an iterator pointing to the first
     for (; kb_itr_valid(&itr); kb_itr_next(SCORESET, ss, &itr)) { // move on
         p = &kb_itr_key(SPScoreSetKey, &itr);
-        if (p->value.asChar) RedisModule_Free(p->value.asChar);
+        /*using SPUniqStr, don't free anymore*/
+        // if (p->value.asChar) RedisModule_Free(p->value.asChar);
         if (p->members) {
             kh_destroy(SIDS, p->members->set); \
             RedisModule_Free(p->members); \
@@ -237,7 +239,7 @@ void SPWriteLexSetToRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss) {
     kb_itr_first(LEXSET, ss, &itr); // get an iterator pointing to the first
     for (; kb_itr_valid(&itr); kb_itr_next(LEXSET, ss, &itr)) { // move on
         p = &kb_itr_key(SPScoreSetKey, &itr);
-        char *key = p->value.asChar;
+        const char *key = p->value.asChar;
         RedisModule_SaveStringBuffer(io, key, strlen(key));
         size_t count = 0;
         // if (p->members->singleId) count++;
@@ -278,7 +280,7 @@ void SPReadLexSetFromRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss, khash_t(SORT
     {
         RedisModuleString *s = RedisModule_LoadString(io);
         SPPtrOrD_t key;
-        key.asChar = (char *)RedisModule_StringPtrLen(s, NULL);
+        key.asChar = RedisModule_StringPtrLen(s, NULL);
         size_t keyCount = RedisModule_LoadUnsigned(io);
         for (size_t k = 0; k < keyCount; ++k)
         {
