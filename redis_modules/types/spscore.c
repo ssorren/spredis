@@ -128,7 +128,7 @@ int SpredisZSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, i
     for (int i = 0; i < keyCount; ++i)
     {
         argIndex++;
-        int scoreRes = RedisModule_StringToDouble(argv[argIndex++], &(scores[i]));
+        int scoreRes = SpredisStringToDouble(argv[argIndex++], &(scores[i]));
         if (scoreRes != REDISMODULE_OK) {
         	// RedisModule_CloseKey(key);
             return RedisModule_ReplyWithError(ctx, "ERR Could not convert score to double");
@@ -202,7 +202,7 @@ int SpredisZScoreLinkSet_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     RedisModuleKey *store = RedisModule_OpenKey(ctx,argv[2],
             REDISMODULE_WRITE);
     double value;
-    int scoreRes = RedisModule_StringToDouble(argv[3], &value);
+    int scoreRes = SpredisStringToDouble(argv[3], &value);
 
     if (scoreRes != REDISMODULE_OK) {
         SPUnlockContext(ctx);
@@ -233,7 +233,7 @@ int SpredisZScoreLinkSet_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     SPScoreSetKey *p;
     SPScoreSetKey search = {.value.asDouble = value};
     SpredisSetCont *result;
-    SpredisProtectReadMap(cont);
+    SpredisProtectReadMap(cont, "SpredisZScoreLinkSet_RedisCommand");
     p = kb_getp(SCORESET, cont->btree, &search);
     result = _SpredisInitSet();
     if (p) {
@@ -298,7 +298,7 @@ int SpredisZSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, i
     double score;
     // int scoreRes;
     // scoreRes = 
-    RedisModule_StringToDouble(argv[3], &score);
+    SpredisStringToDouble(argv[3], &score);
 
     // int res = 
 

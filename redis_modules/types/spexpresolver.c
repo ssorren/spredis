@@ -80,8 +80,8 @@ int SpredisSetGeoResolver_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **
     cont->input = RedisModule_Calloc(2, sizeof(double));
     cont->resolve = SPResolveGeoScore;
     double *latlong = (double *)cont->input;
-    RedisModule_StringToDouble(argv[4], &latlong[0]);
-    RedisModule_StringToDouble(argv[5], &latlong[1]);
+    SpredisStringToDouble(argv[4], &latlong[0]);
+    SpredisStringToDouble(argv[5], &latlong[1]);
 
     // RedisModule_CloseKey(key);
 	RedisModule_ReplyWithLongLong(ctx, 1);

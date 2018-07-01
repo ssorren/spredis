@@ -199,8 +199,9 @@ int SpredisHashSet(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, SPHa
     	kv_push(uint16_t, poss, (uint16_t)TOINTKEY10(argv[i++]));
     	valArg = argv[i++];
     	if (valueType == SPHashDoubleType) {
-    		if (RedisModule_StringToDouble(valArg, &doubleVal) == REDISMODULE_ERR) {
+    		if (SpredisStringToDouble(valArg, &doubleVal) == REDISMODULE_ERR) {
     			errorCondition = 1;
+                // printf("!!! %s\n", RedisModule_StringPtrLen( valArg, NULL ));
     			RedisModule_ReplyWithError(ctx, "ERR Could not parse double value");
     			break;
     		} else {

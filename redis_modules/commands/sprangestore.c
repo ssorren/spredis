@@ -1,8 +1,6 @@
 #include "../spredis.h"
 #include <float.h>
 
-#define SP_INBOUNDS(lat, lon, bounds)  (lon >= bounds.longitude.min && lon <= bounds.longitude.max && lat >= bounds.latitude.min && lat <= bounds.latitude.max)
-
 double SPConvertToMeters(double val, const char * unit) {
     if (unit == NULL) return val;
     if (strcasecmp(unit, "km") == 0) return val * 1000;
@@ -57,9 +55,9 @@ void SPFreeSPStoreRadiusTarg(void *arg) {
 
 void SpredisStoreRangeByRadiusField_Thread(SPStoreRadiusTarg *targ) {
 
-    SpredisProtectReadMap(targ->geoCont);//, "SpredisStoreRangeByRadiusField_Thread");
-    if (targ->hintCont) SpredisProtectReadMap(targ->hintCont);//, "SpredisStoreRangeByRadiusField_Thread");
-    SpredisProtectReadMap(targ->resCont);//, "SpredisStoreRangeByRadiusField_Thread");
+    SpredisProtectReadMap(targ->geoCont, "SpredisStoreRangeByRadiusField_Thread");
+    if (targ->hintCont) SpredisProtectReadMap(targ->hintCont, "SpredisStoreRangeByRadiusField_Thread");
+    SpredisProtectReadMap(targ->resCont, "SpredisStoreRangeByRadiusField_Thread");
 
     double slat = targ->slat;
     double slon = targ->slon;
@@ -155,9 +153,9 @@ void SpredisStoreRangeByRadius_Thread(SPStoreRadiusTarg *targ) {
     // SPStoreRadiusTarg *targ = arg;
     if (targ->radiusField != NULL) return SpredisStoreRangeByRadiusField_Thread(targ);
 
-    SpredisProtectReadMap(targ->geoCont);//, "SpredisStoreRangeByRadius_Thread");
-    if (targ->hintCont) SpredisProtectReadMap(targ->hintCont);//, "SpredisStoreRangeByRadius_Thread");
-    SpredisProtectReadMap(targ->resCont);//, "SpredisStoreRangeByRadius_Thread");
+    SpredisProtectReadMap(targ->geoCont, "SpredisStoreRangeByRadius_Thread");
+    if (targ->hintCont) SpredisProtectReadMap(targ->hintCont, "SpredisStoreRangeByRadius_Thread");
+    SpredisProtectReadMap(targ->resCont, "SpredisStoreRangeByRadius_Thread");
 
     double slat = targ->slat;
     double slon = targ->slon;
@@ -171,7 +169,7 @@ void SpredisStoreRangeByRadius_Thread(SPStoreRadiusTarg *targ) {
     double lat, lon;
     SPGeoHashArea area, bounds;
     SPGeoSearchAreas areas;
-    int64_t start, stop;// = SPGeoHashEncodeForRadius(slat, slon, radius, &ghash);
+    uint64_t start, stop;// = SPGeoHashEncodeForRadius(slat, slon, radius, &ghash);
     SPGetSearchAreas(slat, slon, radius, &areas, &bounds);
     kbtree_t(GEOSET) *geoTree = geoCont->btree;
     SPScoreSetKey *l, *u, *use, *candKey;
@@ -248,15 +246,15 @@ int SpredisStoreRangeByRadius_RedisCommand(RedisModuleCtx *ctx, RedisModuleStrin
 
     double slat, slon, radius;
     int pres;
-    pres = RedisModule_StringToDouble(argv[4], &slat);
+    pres = SpredisStringToDouble(argv[4], &slat);
     if (pres != REDISMODULE_OK) return RedisModule_ReplyWithError(ctx, "ERR could not parse latitude");
-    pres = RedisModule_StringToDouble(argv[5], &slon);
+    pres = SpredisStringToDouble(argv[5], &slon);
     if (pres != REDISMODULE_OK) return RedisModule_ReplyWithError(ctx, "ERR could not parse longitude");
 
     const char * units = RedisModule_StringPtrLen(argv[7], NULL);
     SPHashCont *radiusField = NULL;
     if (argc == 8) {
-        pres = RedisModule_StringToDouble(argv[6], &radius);
+        pres = SpredisStringToDouble(argv[6], &radius);
         if (pres != REDISMODULE_OK) return RedisModule_ReplyWithError(ctx, "ERR could not parse radius");
         
         radius = SPConvertToMeters(radius, units);
@@ -408,8 +406,8 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
 
     double min;
     double max;
-    RedisModule_StringToDouble(RedisModule_CreateString(ctx, gtCmp, strlen(gtCmp)), &min);
-    RedisModule_StringToDouble(RedisModule_CreateString(ctx, ltCmp, strlen(ltCmp)), &max);
+    SpredisStringToDouble(RedisModule_CreateString(ctx, gtCmp, strlen(gtCmp)), &min);
+    SpredisStringToDouble(RedisModule_CreateString(ctx, ltCmp, strlen(ltCmp)), &max);
     SPScoreSetKey *l, *u, *cand;
     SPScoreSetKey t = {
         .value.asDouble = min
@@ -430,8 +428,8 @@ int SpredisStoreRangeByScore_RedisCommandT(RedisModuleCtx *ctx, RedisModuleStrin
     int reached = 0;
     
     kbitr_t itr;
-    SpredisProtectReadMap(testScoreCont);//, "SpredisStoreRangeByScore_RedisCommandT");
-    if (hintCont) SpredisProtectReadMap(hintCont);//, "SpredisStoreRangeByScore_RedisCommandT");
+    SpredisProtectReadMap(testScoreCont, "SpredisStoreRangeByScore_RedisCommandT");
+    if (hintCont) SpredisProtectReadMap(hintCont, "SpredisStoreRangeByScore_RedisCommandT");
     if (l != NULL) {
         kb_itr_getp(SCORESET, testScore, l, &itr);
     } else {
@@ -567,12 +565,12 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     kbitr_t itr;
 
     SPScoreSetKey t = {
-        .value.asChar = (char *)gtCmp
+        .value.asUChar = gtCmp
     };
     SPUnlockContext(ctx);
     
-    SpredisProtectReadMap(testLexCont);//, "SpredisStoreLexRange_RedisCommandT");
-    if (hintCont) SpredisProtectReadMap(hintCont);//, "SpredisStoreLexRange_RedisCommandT");
+    SpredisProtectReadMap(testLexCont, "SpredisStoreLexRange_RedisCommandT");
+    if (hintCont) SpredisProtectReadMap(hintCont, "SpredisStoreLexRange_RedisCommandT");
 
     kb_intervalp(LEXSET, testLex, &t, &l, &u);
     
@@ -587,9 +585,9 @@ int SpredisStoreLexRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
         cand = &kb_itr_key(SPScoreSetKey, &itr);
         if (cand) {
             // RedisModule_Log(ctx, "notice", "GT? %s", cand->value.asChar);
-            if (reached || GT(memcmp(gtCmp, (const unsigned char *)cand->value.asChar, gtLen ))) {
+            if (reached || GT(memcmp(gtCmp, cand->value.asUChar, gtLen ))) {
                 // RedisModule_Log(ctx, "notice",  "GT 1 %s", cand->value.asChar);
-                if (LT(memcmp((const unsigned char *)cand->value.asChar,ltCmp , ltLen ))) {
+                if (LT(memcmp(cand->value.asUChar,ltCmp , ltLen ))) {
                     // RedisModule_Log(ctx, "notice", "LT 1 %s", cand->value.asChar);
                     reached = 1;
                     SPAddAllToSet(res, cand, hint);

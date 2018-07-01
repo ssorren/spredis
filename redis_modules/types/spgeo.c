@@ -231,8 +231,8 @@ int SpredisZGeoSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
     SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
     spid_t id = TOINTID(argv[2],16);
     double lat, lon;
-    RedisModule_StringToDouble(argv[3], &lat);
-    RedisModule_StringToDouble(argv[4], &lon);
+    SpredisStringToDouble(argv[3], &lat);
+    SpredisStringToDouble(argv[4], &lon);
     RedisModule_ReplyWithLongLong(ctx,SPGeoScoreDel(cont, id, lat, lon));
 
     if (kb_size(cont->btree) == 0) {
@@ -265,12 +265,12 @@ int SpredisZGeoSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
     {
         argIndex++;
         argIndex++;
-        int scoreRes = RedisModule_StringToDouble(argv[argIndex++], &(lats[i]));
+        int scoreRes = SpredisStringToDouble(argv[argIndex++], &(lats[i]));
         if (scoreRes != REDISMODULE_OK) {
         	// RedisModule_CloseKey(key);
             return RedisModule_ReplyWithError(ctx, "ERR Could not convert lat to double");
         }
-        scoreRes = RedisModule_StringToDouble(argv[argIndex++], &(lons[i]));
+        scoreRes = SpredisStringToDouble(argv[argIndex++], &(lons[i]));
         if (scoreRes != REDISMODULE_OK) {
         	// RedisModule_CloseKey(key);
             return RedisModule_ReplyWithError(ctx, "ERR Could not convert lon to double");

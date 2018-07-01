@@ -125,7 +125,7 @@ void SPThreadedFacet(void *arg) {
 	
 	for (int i = 0; i < targ->facetCount; ++i)
 	{
-		SpredisProtectReadMap(facets[i]->col);//, "SPThreadedFacet");
+		SpredisProtectReadMap(facets[i]->col, "SPThreadedFacet");
 	}
 	int keyI;
 	int facetCount = targ->facetCount;

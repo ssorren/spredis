@@ -42,22 +42,25 @@ SPPtrOrD_t SPGetPartValue(const char *ctype, RedisModuleString *arg1, RedisModul
 	// const char *ctype = RedisModule_StringPtrLen(type, NULL);
 	double lat, lon;
 	if (!strcmp(SPGeoPartType, ctype)) {
-		RedisModule_StringToDouble(arg1, &lat);
-		RedisModule_StringToDouble(arg1, &lon);
+		SpredisStringToDouble(arg1, &lat);
+		SpredisStringToDouble(arg2, &lon);
 		res.asUInt = SPGeoHashEncode(lat, lon);
 	} else if (!strcmp(SPDoublePartType, ctype)) {
-		RedisModule_StringToDouble(arg1, &lat);
+		SpredisStringToDouble(arg1, &lat);
 		res.asDouble = lat;
 	} else {
-		res.asChar = SPUniqStr(ctype);
+		res.asChar = SPUniqStr(RedisModule_StringPtrLen(arg1, NULL));
 	} 
 	return res;
 }
 
 
 void SpredisCompSetRDBSave(RedisModuleIO *io, void *ptr) {
+
+	RedisModuleCtx *ctx = RedisModule_GetContextFromIO(io);
+	RedisModule_AutoMemory(ctx);
 	SPCompositeScoreCont *cont = ptr;
-	// SpredisProtectReadMap(cont);
+	// SpredisProtectReadMap(cont, "SpredisCompSetRDBSave");
 	SPCompositeCompCtx *compCtx = cont->compCtx;
 	RedisModule_SaveUnsigned(io, compCtx->valueCount);
 	RedisModule_SaveUnsigned(io, kb_size(cont->btree));
@@ -66,20 +69,28 @@ void SpredisCompSetRDBSave(RedisModuleIO *io, void *ptr) {
 		RedisModule_SaveUnsigned(io, compCtx->types[i]);
 	}
 	kbitr_t itr;
+	size_t writeCount = 0;
     SPCompositeScoreSetKey *p;
     kb_itr_first(COMPIDX, cont->btree, &itr);
+    RedisModuleString *tmp;
 	for (; kb_itr_valid(&itr); kb_itr_next(COMPIDX, cont->btree, &itr)) { // move on
-
+		writeCount++;
         p = &kb_itr_key(SPCompositeScoreSetKey, &itr);
 
         for (uint8_t i = 0; i < compCtx->valueCount; ++i)
 		{
-			if (compCtx->types[i] == SPGeoPart) RedisModule_SaveUnsigned(io, p->value[i].asUInt);
-			else if (compCtx->types[i] == SPDoublePart) RedisModule_SaveDouble(io, p->value[i].asDouble);
-			else RedisModule_SaveStringBuffer(io, p->value[i].asChar, strlen(p->value[i].asChar));
+			if (compCtx->types[i] == SPGeoPart) {
+				RedisModule_SaveUnsigned(io, p->value[i].asUInt);
+			} else if (compCtx->types[i] == SPDoublePart) {
+				RedisModule_SaveDouble(io, p->value[i].asDouble);
+			} else {
+				tmp = RedisModule_CreateString(ctx, p->value[i].asChar, strlen(p->value[i].asChar));
+				RedisModule_SaveString(io, tmp);
+				RedisModule_FreeString(ctx, tmp);
+			}
 		}
         size_t count = 0;
-        if (p->members->set) count += kh_size(p->members->set);
+        if (p->members->set) count = kh_size(p->members->set);
         RedisModule_SaveUnsigned(io, count);
         if (p->members->set) {
             spid_t id;
@@ -88,12 +99,13 @@ void SpredisCompSetRDBSave(RedisModuleIO *io, void *ptr) {
             }); 
         }
     }
+    
     // SpredisUnProtectMap(cont);
 }
 
 void SpredisCompSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value) {
 	SPCompositeScoreCont *cont = value;
-	// SpredisProtectReadMap(cont);
+	// SpredisProtectReadMap(cont, "SpredisCompSetRewriteFunc");
 	SPCompositeCompCtx *compCtx = cont->compCtx;
 	RedisModuleCtx *ctx = RedisModule_GetContextFromIO(aof);
 
@@ -172,12 +184,16 @@ void SpredisCompSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void 
 }
 
 void *SpredisCompSetRDBLoad(RedisModuleIO *io, int encver) {
+	RedisModuleCtx *ctx = RedisModule_GetContextFromIO(io);
+	RedisModule_AutoMemory(ctx);
+
 	uint8_t valueCount = (uint8_t)RedisModule_LoadUnsigned(io);
 	SPCompositeScoreCont *cont = SPInitCompCont(valueCount);
 	SPCompositeCompCtx *compCtx = cont->compCtx;
+	RedisModuleString *tmp;
 
 	size_t count = RedisModule_LoadUnsigned(io);
-	char *s;
+	// char *s;
 	spid_t id;
 	int absent;
 	SPPtrOrD_t *value;
@@ -200,12 +216,11 @@ void *SpredisCompSetRDBLoad(RedisModuleIO *io, int encver) {
 			} else if (compCtx->types[ii] == SPDoublePart) {
 				value[ii].asDouble = RedisModule_LoadDouble(io);
 			} else {
-				s = RedisModule_LoadStringBuffer(io, NULL);
-				value[ii].asChar = (const char *)SPUniqStr(s);
-				RedisModule_Free(s);
+				tmp = RedisModule_LoadString(io);
+				value[ii].asChar = SPUniqStr( RedisModule_StringPtrLen(tmp, NULL) );
+				RedisModule_FreeString(ctx, tmp);
 			}
 		}
-		kb_putp(COMPIDX, cont->btree, &p);
 		size_t scount = RedisModule_LoadUnsigned(io);
 		if (scount) {
 			while(scount--) {
@@ -213,12 +228,48 @@ void *SpredisCompSetRDBLoad(RedisModuleIO *io, int encver) {
 				kh_put(SIDS, p.members->set, id, &absent);
 			}
 		}
+		kb_putp(COMPIDX, cont->btree, &p);
 	}
 	return cont;
 }
 
-void SpredisCompSetFreeCallback(void *value) {
+void SPCompScoreContDestroy (SPCompositeScoreCont *cont) {
+	
 
+	SpredisProtectWriteMap(cont);
+	kbitr_t itr;
+	kb_itr_first(COMPIDX, cont->btree, &itr);
+	SPCompositeScoreSetKey *p;
+	// printf("A\n");
+	for (; kb_itr_valid(&itr); kb_itr_next(COMPIDX, cont->btree, &itr)) { // move on
+        p = &kb_itr_key(SPCompositeScoreSetKey, &itr);
+        if (p->members) {
+        	if (p->members->set) kh_destroy(SIDS, p->members->set);
+        	RedisModule_Free(p->members);
+        }
+        if (p->value) RedisModule_Free(p->value);
+    }
+    kb_destroy(COMPIDX, cont->btree);
+    // printf("B\n");
+    RedisModule_Free(cont->compCtx->types);
+    RedisModule_Free(cont->compCtx->compare);
+    RedisModule_Free(cont->compCtx);
+    // printf("C\n");
+	SpredisUnProtectMap(cont);
+	pthread_rwlock_destroy(&cont->mutex);
+	// printf("D\n");
+	RedisModule_Free(cont);
+	// printf("E\n");
+}
+
+void SpredisCompSetFreeCallback(void *value) {
+	if (value == NULL) return;
+
+    SPCompositeScoreCont *cont = value;
+    SPCompScoreContDestroy(cont);
+    // SP_TWORK(SPCompScoreContDestroy, cont, {
+    //     //do nothing
+    // });
 }
 
 void SPCompPopulateValues(int argIdx, long long valCount, SPCompositeScoreCont *cont, SPPtrOrD_t *value, RedisModuleString **argv) {
@@ -274,12 +325,15 @@ int SpredisCompSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
 		cont = SPInitCompCont((int)valCount);
 		SpredisSetRedisKeyValueType(key,SPCOMPTYPE,cont);
 	}
-	SpredisProtectWriteMap(cont);
+	
 	// SPUnlockContext(ctx);
+	SpredisProtectWriteMap(cont);
 	SPPtrOrD_t *value = RedisModule_Calloc(valCount, sizeof(SPPtrOrD_t));
+	
+	SPCompPopulateValues(4, valCount, (contWasNull ? cont : NULL), value, argv);
 
 	SPCompositeScoreSetKey search = {.compCtx = cont->compCtx, .value = value};
-	SPCompPopulateValues(4, valCount, (contWasNull ? cont : NULL), value, argv);
+	
 
     SPCompositeScoreSetKey *compkey = kb_getp(COMPIDX, cont->btree, &search);
     int absent;
@@ -311,8 +365,9 @@ int SpredisCompSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
 		// SPUnlockContext(ctx);
 		return RedisModule_ReplyWithLongLong(ctx, 0);
 	}
-	SpredisProtectWriteMap(cont);
 	// SPUnlockContext(ctx);
+	SpredisProtectWriteMap(cont);
+	// 
 
 	long long valCount = 0;
 	spid_t id = TOINTID(argv[2],16);

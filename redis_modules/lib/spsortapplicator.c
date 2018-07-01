@@ -81,7 +81,7 @@ void *SPSortQApplyThread(void *x_void_ptr) {
 		while (kv_size(SPRESORTQ->q)) {
 			SPRESORTQ->resorting = kv_pop(SPRESORTQ->q);
 			if (SPRESORTQ->resorting == NULL) continue;
-			SpredisProtectReadMap(SPRESORTQ->resorting);
+			SpredisProtectReadMap(SPRESORTQ->resorting, "SPSortQApplyThread");
 
 			double newScore = 0;
 		    SPScoreSetKey *skey;

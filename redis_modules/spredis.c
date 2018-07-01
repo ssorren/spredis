@@ -255,6 +255,20 @@ void SPThreadedDoWork(void *arg)
     RedisModule_UnblockClient(targ->bc, targ);
     
 }
+int SpredisStringToDouble(RedisModuleString *str, double *val) {
+    
+    if (strcmp("-inf", RedisModule_StringPtrLen(str, NULL)) == 0) {
+        // printf("%s\n", RedisModule_StringPtrLen(str, NULL));    
+        (*val) = DBL_MIN; 
+        return REDISMODULE_OK;
+    }
+    if (strcmp("+inf", RedisModule_StringPtrLen(str, NULL) ) == 0) {
+        // printf("%s\n", RedisModule_StringPtrLen(str, NULL));
+        (*val) = DBL_MAX; 
+        return REDISMODULE_OK;
+    }
+    return RedisModule_StringToDouble(str, val);
+}
 
 int SPThreadedWork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int (*command)(RedisModuleCtx*, RedisModuleString**, int)) {
     RedisModule_AutoMemory(ctx);
@@ -526,7 +540,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     if (RedisModule_CreateCommand(ctx,"spredis.compcard",
         SpredisCompSetCard_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
-    
+
     if (RedisModule_CreateCommand(ctx,"spredis.comprangestore",
         SpredisCompStoreRange_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;

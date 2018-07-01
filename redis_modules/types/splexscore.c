@@ -17,12 +17,13 @@ SPScoreCont *SPLexScoreContInit() {
 
 
 void SPLexScoreContDestroy(SPScoreCont *cont) {
-	SpredisProtectWriteMap(cont);//, "SPLexScoreContDestroy");
+	
 
     if (cont->sort) {
         SpredisDQSort(cont);
     }
-    
+    //!!!IMPORTANT - do not grab write lock until you own the sort lock
+    SpredisProtectWriteMap(cont);//, "SPLexScoreContDestroy");
     SPDestroyLexScoreSet(cont->btree);
     // kbtree_t(SCORESET)* tree = cont->btree;  
  //    kb_destroy(SCORESET, tree);
@@ -72,10 +73,11 @@ void *SpredisZLexSetRDBLoad(RedisModuleIO *io, int encver) {
     SpredisProtectWriteMap(cont);//, "SpredisZLexSetRDBLoad");
     cont->sort = RedisModule_LoadSigned(io);
     SPReadLexSetFromRDB(io, cont->btree, (cont->sort ? cont->st : NULL));
+    SpredisUnProtectMap(cont);
     if (cont->sort) {
         SpredisQSort(cont);
     }
-    SpredisUnProtectMap(cont);//, "SpredisZLexSetRDBLoad");
+    //, "SpredisZLexSetRDBLoad");
     return cont;
 }
 
@@ -99,11 +101,12 @@ int SPLexScorePutValue(SPScoreCont *cont, spid_t id, const char *lexValue, int s
     int resort;
     SPPtrOrD_t val = {.asChar = lexValue};
     SPAddLexScoreToSet(cont->btree, (sort ? cont->st : NULL), id, val, sort ? &resort : NULL);
+    SpredisUnProtectMap(cont);
     if (sort && resort) {
         SpredisQSort(cont);
     }
 	int res = 1;
-    SpredisUnProtectMap(cont);//, "SPLexScorePutValue");
+    //, "SPLexScorePutValue");
 	return res;
 }
 
@@ -210,8 +213,8 @@ int SpredisZLexLinkSet_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **ar
 
     SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
     SPUnlockContext(ctx);
-
-    SpredisProtectReadMap(cont);//, "SpredisZLexLinkSet_RedisCommand");
+    // printf("Linking\n");
+    SpredisProtectReadMap(cont, "SpredisZLexLinkSet_RedisCommand");
     SPScoreSetKey *p;
     SPScoreSetKey search = {.value.asChar = value};
     // search.value.asChar = (char *)value;

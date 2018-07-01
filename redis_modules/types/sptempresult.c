@@ -103,7 +103,7 @@ int SpredisTMPResGetDocs_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
     }
     // printf("%s %lld %lld %zu\n", "hmmm", start, count, res->size);
-    SpredisProtectReadMap(dc);//, "SpredisTMPResGetDocs_RedisCommandT");
+    SpredisProtectReadMap(dc, "SpredisTMPResGetDocs_RedisCommandT");
     long long finalCount = 0;    
     SpredisSortData *d;
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);

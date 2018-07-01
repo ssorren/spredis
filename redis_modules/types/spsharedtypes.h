@@ -23,6 +23,7 @@ typedef union _SPPtrOrD_t {
     int64_t asInt;
     uint64_t asUInt;
     const char *asChar;
+    const unsigned char *asUChar;
     int asDumbInt;
 } SPPtrOrD_t;
 
@@ -123,9 +124,22 @@ typedef struct _SPScoreSetKey
     SPScoreSetMembers *members;
 } SPScoreSetKey;
 
+// typedef int (*SPCompositeComp)(SPPtrOrD_t , SPPtrOrD_t);
 
+// typedef struct _SPCompositeCompCtx {
+//     uint8_t valueCount;
+//     uint8_t *types;
+//     SPCompositeComp *compare;
+// } SPCompositeCompCtx;
 
+// typedef struct _SPCompositeScoreSetKey
+// {
+//     SPPtrOrD_t value;
+//     SPCompositeCompCtx *compCtx;
+//     SPScoreSetMembers *members;
+// } SPCompositeScoreSetKey;
 
+#include "./spcomposite.h"
 
 // typedef struct _SPGeoSetKey
 // {

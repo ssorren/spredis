@@ -38,29 +38,29 @@ static inline double  SPGetDist(double alat, double alon, double blat, double bl
 
 
 
-// #define SpredisProtectWriteMap(map) { \
-//     int ____LOCK_RES = pthread_rwlock_trywrlock(&map->mutex); \
-//     while (____LOCK_RES == EBUSY) { \
-//         printf("Trying to lock again\n"); \
-//          // sleep(1); \
-//         ____LOCK_RES = pthread_rwlock_trywrlock(&map->mutex);\
-//     } \
-// }
+/*#define SpredisProtectWriteMap(map) { \
+    int ____LOCK_RES = pthread_rwlock_trywrlock(&map->mutex); \
+    if (____LOCK_RES == EBUSY || ____LOCK_RES == EDEADLK) { \
+        printf("Trying to write lock again %d\n",____LOCK_RES == EDEADLK); \
+        ____LOCK_RES = pthread_rwlock_wrlock(&map->mutex);\
+        printf("Gained lock\n"); \
+    } \
+}*/
 
 #define SpredisProtectWriteMap(map) pthread_rwlock_wrlock(&map->mutex)
 
 // 
 
-#define SpredisProtectReadMap(map) pthread_rwlock_rdlock(&map->mutex)
+#define SpredisProtectReadMap(map, src) pthread_rwlock_rdlock(&map->mutex)
 
-// #define SpredisProtectReadMap(map) { \
-//     int ____LOCK_RES = pthread_rwlock_tryrdlock(&map->mutex); \
-//     while (____LOCK_RES == EBUSY || ____LOCK_RES == EDEADLK) { \
-//         printf("Trying to lock again, %d\n",____LOCK_RES == EDEADLK); \
-//         // sleep(1); \
-//         ____LOCK_RES = pthread_rwlock_tryrdlock(&map->mutex);\
-//     } \
-// }
+/*#define SpredisProtectReadMap(map, src) { \
+    int ____LOCK_RES = pthread_rwlock_tryrdlock(&map->mutex); \
+    if (____LOCK_RES == EBUSY || ____LOCK_RES == EDEADLK) { \
+        printf("Trying to read lock again, %s, %d\n",src,____LOCK_RES == EDEADLK); \
+        ____LOCK_RES = pthread_rwlock_rdlock(&map->mutex);\
+        printf("Gained lock\n"); \
+    } \
+}*/
 
 
 #define SpredisUnProtectMap(map) pthread_rwlock_unlock(&map->mutex)

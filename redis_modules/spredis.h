@@ -77,6 +77,7 @@ typedef khint64_t spid_t;
 #define SPLockContext(ctx) RedisModule_ThreadSafeContextLock(ctx)
 #define SPUnlockContext(ctx) RedisModule_ThreadSafeContextUnlock(ctx)
 
+int SpredisStringToDouble(RedisModuleString *str, double *val);
 void kt_for(int n_threads, void (*func)(void*,long,int), void *data, long n);
 
 int HASH_NOT_EMPTY_AND_WRONGTYPE(RedisModuleKey *key, int *type, int targetType);

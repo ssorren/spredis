@@ -37,6 +37,8 @@ extern "C"
 {
 #endif
 
+#define SP_INBOUNDS(lat, lon, bounds)  (lon >= bounds.longitude.min && lon <= bounds.longitude.max && lat >= bounds.latitude.min && lat <= bounds.latitude.max)
+    
     typedef enum
     {
         GEOHASH_NORTH = 0,

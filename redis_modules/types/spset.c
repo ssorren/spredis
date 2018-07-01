@@ -113,7 +113,7 @@ static SpredisSetCont *SpredisSIntersect(SpredisSetCont **cas, int count) {
     size_t j;
     j = count;
     while (j) {
-        SpredisProtectReadMap(cas[--j]);//, "SpredisSIntersect");
+        SpredisProtectReadMap(cas[--j], "SpredisSIntersect");
     }
     SpredisSpredisSetContSort(count, cas, NULL);
     spid_t id;
@@ -160,7 +160,7 @@ static SpredisSetCont *SpredisSDifference(SpredisSetCont **cas, int count) {
     int j = count;
     // long long startTimer = RedisModule_Milliseconds(); 
     while (j) {
-        SpredisProtectReadMap(cas[--j]);//, "SpredisSDifference");
+        SpredisProtectReadMap(cas[--j], "SpredisSDifference");
         // printf("set size = %lu\n", kh_size(cas[j]->set));
     }
     if (count > 2) {
@@ -215,7 +215,7 @@ static SpredisSetCont *SpredisSUnion(SpredisSetCont **cas, int count) {
     while (count) {
         a = cas[--count];
         if (a != NULL) {
-            SpredisProtectReadMap(a);//, "SpredisSUnion");
+            SpredisProtectReadMap(a, "SpredisSUnion");
             set = a->set;
             kh_foreach_key(set, id, {
                 kh_put(SIDS,product, id, &absent);
@@ -243,7 +243,7 @@ static SpredisSetCont *SpredisSAddAll(SpredisSetCont **cas, int count) {
     while (count > 1) {
         a = cas[--count];
         if (a != NULL) {
-            SpredisProtectReadMap(a);//, "SpredisSAddAll");
+            SpredisProtectReadMap(a, "SpredisSAddAll");
             set = a->set;
             kh_foreach_key(set, id, {
                 kh_put(SIDS,product, id, &absent);
@@ -325,7 +325,7 @@ static int SpredisSetCard_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString *
 
     SpredisSetCont *dhash = RedisModule_ModuleTypeGetValue(key);
     SPUnlockContext(ctx);
-    SpredisProtectReadMap(dhash);//, "SpredisSetCard_RedisCommand");
+    SpredisProtectReadMap(dhash, "SpredisSetCard_RedisCommand");
     RedisModule_ReplyWithLongLong(ctx,kh_size(dhash->set));
     SpredisUnProtectMap(dhash);//, "SpredisSetCard_RedisCommand");
     // RedisModule_CloseKey(key);

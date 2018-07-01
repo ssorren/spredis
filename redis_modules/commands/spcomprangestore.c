@@ -1,17 +1,38 @@
 #include "./spcomprangestore.h"
+#include <float.h>
+#include <float.h>
+KHASH_DECLARE_SET(PTR, uint64_t);
+KHASH_SET_INIT_INT64(PTR);
+
+typedef struct  _SPCompGeoData {
+	SPGeoSearchAreas areas;
+	SPGeoHashArea area;
+	double lat, lon, radius;
+	uint8_t hasFieldQuery;
+	SPScoreCont *fieldCont;
+	RedisModuleString *unit, *radiusField;
+} SPCompGeoData;
+
+typedef struct  _SPCompLexData {
+	uint8_t wildcard;
+	int minLen, maxLen;
+	const char *rawMax;
+} SPCompLexData;
 
 typedef struct _SPCompRange {
 	SPPtrOrD_t min, max;
-	double lat, lon, radius;
-	uint8_t wildcard;
-	RedisModuleString *unit, *radiusField;
+	SPCompGeoData geo;
+	SPCompLexData lex;
 } SPCompRange;
 
 typedef struct _SPCompQueryComparator {
-	int (*gt)(SPPtrOrD_t, SPPtrOrD_t);
-	int (*lt)(SPPtrOrD_t, SPPtrOrD_t);
+	int (*gt)(SPPtrOrD_t, SPPtrOrD_t, int lenComp);
+	int (*lt)(SPPtrOrD_t, SPPtrOrD_t, int lenComp);
 } SPCompQueryComparator;
 
+
+typedef kvec_t(SPCompositeScoreSetKey*) SPKeyVec;
+typedef int (*SPCompSatisfier)(SPKeyVec *candidates, void *ptr, khash_t(SIDS) *res, khash_t(SIDS) *hint, SPKeyVec *leavings);
 
 typedef struct _SPCompQueryPart {
 	SPCompRange range;
@@ -20,40 +41,98 @@ typedef struct _SPCompQueryPart {
 	uint8_t valueIndex, needsSatifying;
 	SPCompQueryComparator comp;
 	SPCompQueryComparator *comps;
+	SPCompSatisfier satisfy;
 } SPCompQueryPart;
 
 
-typedef int (*SPCompSatisfier)(SPCompQueryPart*,SPCompositeScoreSetKey*);
-typedef kvec_t(SPCompositeScoreSetKey*) SPKeyVec;
 
-static int SpCompDoubleGT(SPPtrOrD_t a, SPPtrOrD_t b) {
+
+static inline int SPGeoCompRadiusMatch(SPCompositeScoreSetKey *candKey, uint8_t valueIndex, SPCompGeoData *geo) {
+	double lat, lon;
+	SPGeoHashDecode(candKey->value[valueIndex].asUInt, &lat, &lon);
+    // distance = SPGetDist(geo->lat, geo->lon, lat, lon);
+    if (SP_INBOUNDS(lat, lon, geo->area) == 0) return 0;
+	return SPGetDist(geo->lat, geo->lon, lat, lon) <= geo->radius ? 1 : 0;
+}
+
+static int SpCompGeoSatisfier(SPKeyVec *candidatesPtr, void *ptr, khash_t(SIDS) *res, khash_t(SIDS) *hint, SPKeyVec *leavingsPtr) {
+	
+	SPCompQueryPart *qp;
+	qp = ptr;
+	size_t i, count;
+	SPKeyVec leavings = leavingsPtr[0];
+	SPKeyVec candidates, orig;
+	kv_init(candidates);
+	orig = candidatesPtr[0];
+	SPCompositeScoreSetKey *candKey;
+	//happy path
+	SPCompGeoData *geo;
+	int defer = 0;
+	if (!qp->range.geo.radiusField) {
+		count = kv_size(orig);
+		for (i = 0; i < count; ++i)
+		{
+			candKey = kv_A(orig, i);
+			if (candKey) {
+				for (int k = 0; k < count; ++k)
+				{
+					geo = &(qp->allRanges[k].geo); 
+					if (geo->radiusField) {
+						defer = 1;
+						continue;
+					}
+					if ( SPGeoCompRadiusMatch(candKey, qp->valueIndex, geo) ) {
+						kv_push(SPCompositeScoreSetKey*, candidates, candKey);
+						break;
+					} else {
+						kv_push(SPCompositeScoreSetKey*, leavings, candKey);
+					}
+				}
+			}
+		}
+		kv_destroy(orig);
+		(*candidatesPtr) = candidates;
+	}
+	return defer;
+}
+// static int SpCompGeoFieldSatisfier(SPCompositeScoreSetKey *key, void *context, khash_t(SIDS) *hint) {
+// 	return 1;
+// }
+
+static int SpCompGeoGTE(SPPtrOrD_t a, SPPtrOrD_t b, int lenComp) {
+	return a.asUInt >= b.asUInt;
+}
+static int SpCompGeoLTE(SPPtrOrD_t a, SPPtrOrD_t b, int lenComp) {
+	return a.asUInt <= b.asUInt;
+}
+
+//if we're searching by field len, or have come across an include all wildcard, always return true as evert thing is game
+static int SpCompWildCard(SPPtrOrD_t a, SPPtrOrD_t b, int lenComp) {
+	return 1;
+}
+
+static int SpCompDoubleGT(SPPtrOrD_t a, SPPtrOrD_t b, int lenComp) {
 	return a.asDouble > b.asDouble; 
 }
-static int SpCompDoubleLT(SPPtrOrD_t a, SPPtrOrD_t b) {
+static int SpCompDoubleLT(SPPtrOrD_t a, SPPtrOrD_t b, int lenComp) {
 	return a.asDouble < b.asDouble;	
 }
-static int SpCompDoubleGTE(SPPtrOrD_t a, SPPtrOrD_t b) {
+static int SpCompDoubleGTE(SPPtrOrD_t a, SPPtrOrD_t b, int lenComp) {
 	return a.asDouble >= b.asDouble;
 }
-static int SpCompDoubleLTE(SPPtrOrD_t a, SPPtrOrD_t b) {
+static int SpCompDoubleLTE(SPPtrOrD_t a, SPPtrOrD_t b, int lenComp) {
 	return a.asDouble <= b.asDouble;
 }
 
-
-// static int SpCompLexGT(SPPtrOrD_t a, SPPtrOrD_t b) {
-// 	return a.asDouble > b.asDouble; 
-// }
-// static int SpCompLexLT(SPPtrOrD_t a, SPPtrOrD_t b) {
-// 	return a.asDouble < b.asDouble;	
-// }
-static int SpCompLexGTE(SPPtrOrD_t a, SPPtrOrD_t b) {
-	return a.asDouble >= b.asDouble;
+static int SpCompLexGTE(SPPtrOrD_t a, SPPtrOrD_t b, int lenComp) {
+	return (memcmp(a.asUChar, b.asUChar, lenComp) >= 0) ? 1 : 0;
 }
-static int SpCompLexLTE(SPPtrOrD_t a, SPPtrOrD_t b) {
-	return a.asDouble <= b.asDouble;
+static int SpCompLexLTE(SPPtrOrD_t a, SPPtrOrD_t b, int lenComp) {
+	return (memcmp(a.asUChar, b.asUChar, lenComp) <= 0) ? 1 : 0;;
 }
 
-static int SpCompLexEQ(SPPtrOrD_t a, SPPtrOrD_t b) {
+static int SpCompLexEQ(SPPtrOrD_t a, SPPtrOrD_t b, int lenComp) {
+	// printf("%s == %s == %d\n", a.asChar, b.asChar, strcmp(a.asChar, b.asChar) ? 0 : 1);
 	return strcmp(a.asChar, b.asChar) ? 0 : 1;
 }
 
@@ -67,8 +146,8 @@ static int SpredisBuildDoubleQueryPart(RedisModuleCtx *ctx, SPCompQueryPart *qp,
 		qp->comps = RedisModule_Calloc(count, sizeof(SPCompQueryComparator));
 		for (int i = 0; i < count; ++i)
 		{
-			RedisModule_StringToDouble(argv[++idx], &min);
-			RedisModule_StringToDouble(argv[++idx], &max);
+			SpredisStringToDouble(argv[++idx], &min);
+			SpredisStringToDouble(argv[++idx], &max);
 			RedisModule_StringToLongLong(argv[++idx], &minExcl);
 			RedisModule_StringToLongLong(argv[++idx], &maxExcl);
 			// printf("min: %f, max: %f, minExcl %d, maxExcl %d\n", min, max, minExcl, maxExcl);
@@ -88,8 +167,8 @@ static int SpredisBuildDoubleQueryPart(RedisModuleCtx *ctx, SPCompQueryPart *qp,
 
 		}
 	} else {
-		RedisModule_StringToDouble(argv[++idx], &min);
-		RedisModule_StringToDouble(argv[++idx], &max);
+		SpredisStringToDouble(argv[++idx], &min);
+		SpredisStringToDouble(argv[++idx], &max);
 		RedisModule_StringToLongLong(argv[++idx], &minExcl);
 		RedisModule_StringToLongLong(argv[++idx], &maxExcl);
 		qp->range.min.asDouble = min;
@@ -103,69 +182,243 @@ static int SpredisBuildDoubleQueryPart(RedisModuleCtx *ctx, SPCompQueryPart *qp,
 	return REDISMODULE_OK;
 }
 
+/*
+	this is the most complicated type of single-pass search we can do
+*/
 static int SpredisBuildGeoQueryPart(RedisModuleCtx *ctx, SPCompQueryPart *qp, RedisModuleString **argv, int count, int idx, int *argIdx) {
 	double lat, lon, radius;
 	RedisModuleString *unit, *field;
 	qp->rangeCount = count;
+	/*
+		we'll have to do haversine later
+	*/
 	qp->needsSatifying = 1;
+
+	/*
+		here's our base comparator, will be overridden if we run accross a radius by field query
+	*/
+	qp->comp.gt = SpCompGeoGTE;
+	qp->comp.lt = SpCompGeoLTE;
+	qp->satisfy = SpCompGeoSatisfier;
+	size_t fieldLen;
+	qp->allRanges = RedisModule_Calloc(count, sizeof(SPCompRange));
+	qp->comps = RedisModule_Calloc(count, sizeof(SPCompQueryComparator));
+	SPGeoHashArea area;
+	uint64_t geoMin, geoMax;
 	for (int i = 0; i < count; ++i)
 	{
-		RedisModule_StringToDouble(argv[++idx], &lat);
-		RedisModule_StringToDouble(argv[++idx], &lon);
-		RedisModule_StringToDouble(argv[++idx], &radius);
+		SpredisStringToDouble(argv[++idx], &lat);
+		SpredisStringToDouble(argv[++idx], &lon);
+		SpredisStringToDouble(argv[++idx], &radius);
 		unit = argv[++idx];
 		field = argv[++idx];
-		if (i == 0) {
-			// qp->range.lat = lat;
-			// qp->range.lon = lon;
-			// qp->range.radius = radius;
+		RedisModule_StringPtrLen(field, &fieldLen);
+		if (radius && radius < DBL_MAX && radius > 0) {
+			radius = SPConvertToMeters(radius, RedisModule_StringPtrLen(unit, NULL));
+		} else {
+			radius = DBL_MAX;
 		}
+		if (i == 0) {
+			qp->range.geo.lat = lat;
+			qp->range.geo.lon = lon;
+			qp->range.geo.radius = radius;
+			qp->range.geo.unit = unit;
+			qp->range.geo.radiusField = fieldLen ? field : NULL;
+		}
+		qp->allRanges[i].geo.lat = lat;
+		qp->allRanges[i].geo.lon = lon;
+		qp->allRanges[i].geo.radius = radius;
+		qp->allRanges[i].geo.unit = unit;
+		qp->allRanges[i].geo.radiusField = fieldLen ? field : NULL;
+		qp->comps[i].gt = fieldLen ? SpCompWildCard : SpCompGeoGTE;
+		qp->comps[i].lt = fieldLen ? SpCompWildCard : SpCompGeoLTE;
+		// qp->comps[i].satisfy = fieldLen ? SpCompGeoFieldSatisfier : SpCompGeoSatisfier;
+		//we've run across a field len, all entries are game
+		if (fieldLen) {
+			qp->range.geo.hasFieldQuery = 1;
+			qp->comp.gt = SpCompWildCard;
+			qp->comp.lt = SpCompWildCard;
+		} else {
+			/*
+				get the neighboring bounding boxes
+			*/
+			SPGetSearchAreas(lat, lon, radius, &qp->allRanges[i].geo.areas, &qp->allRanges[i].geo.area);
+			/*
+				we ned to iterate through all the neighbors and 
+				find the min/max uint64 for each individual query part 
+				as wll as the overall min/max
+			*/
+			for (int gi = 0; gi < 9; ++gi)
+			{
+				area = qp->allRanges[i].geo.areas.area[gi];
+				if (area.hash.bits) {
+					geoMin = area.hash.bits << (62 - (area.hash.step * 2));
+					geoMax = ++area.hash.bits << (62 - (area.hash.step * 2));
+					//we may have hit a zero bit bounding box on previous neighbors (individual)
+					if ( qp->allRanges[i].min.asUInt == 0 || geoMin < qp->allRanges[i].min.asUInt) {
+						qp->allRanges[i].min.asUInt = geoMin;	
+					}
+					if ( qp->allRanges[i].max.asUInt == 0 || geoMax > qp->allRanges[i].max.asUInt) {
+						qp->allRanges[i].max.asUInt = geoMax;	
+					}
+					//we may have hit a zero bit bounding box on previous neighbors (overall)
+			        if (i == 0 || qp->range.min.asUInt == 0) {
+			        	qp->range.min.asUInt = qp->allRanges[i].min.asUInt;
+			        }
+			        //we may have hit a zero bit bounding box on previous neighbors (overall)
+			        if (i == 0 || qp->range.max.asUInt == 0) {
+			        	qp->range.max.asUInt = qp->allRanges[i].max.asUInt;
+			        }
+
+			        //find min/max for overall query
+			        if (i > 0) {
+			        	if (qp->allRanges[i].min.asUInt < qp->range.min.asUInt)	{
+			        		qp->range.min.asUInt = qp->allRanges[i].min.asUInt;
+			        	}
+			        	if (qp->allRanges[i].max.asUInt > qp->range.max.asUInt)	{
+			        		qp->range.max.asUInt = qp->allRanges[i].max.asUInt;
+			        	}
+			        }
+			        
+				}
+			}
+		}
+	}
+	for (int i = 0; i < count; ++i)
+	{
+		if (qp->allRanges[i].geo.radius == DBL_MAX) {
+			/* 
+				this query will return everything 
+			*/
+			qp->needsSatifying = 0;
+			qp->range.min.asUInt = 0;
+			qp->range.max.asUInt = UINT64_MAX;
+			qp->comp.gt = SpCompWildCard;
+			qp->comp.lt = SpCompWildCard;
+			if (qp->allRanges) RedisModule_Free(qp->allRanges);
+			if (qp->comps) RedisModule_Free(qp->comps);
+			qp->allRanges = NULL;
+			qp->comps = NULL;
+			break;
+		} 
 	}
 	(*argIdx) = idx;
 	return REDISMODULE_OK;
 }
 
 static int SpredisBuildLexQueryPart(RedisModuleCtx *ctx, SPCompQueryPart *qp, RedisModuleString **argv, int count, int idx, int *argIdx) {
-	const char *min;
+	const char *min, *max;
 	// int minExcl, maxExcl;
 	qp->rangeCount = count;
 	qp->needsSatifying = 0;
 	long long wc;
+	int foundWC = 0;
 	if (count > 1) {
 		qp->allRanges = RedisModule_Calloc(count, sizeof(SPCompRange));
 		qp->comps = RedisModule_Calloc(count, sizeof(SPCompQueryComparator));
 		for (int i = 0; i < count; ++i)
 		{
 			min = RedisModule_StringPtrLen(argv[++idx], NULL);
+			//this jsu makes the code less confusing
+			max = min;
 			RedisModule_StringToLongLong(argv[++idx], &wc);
-			if (i == 0) {
-				qp->range.min.asChar = min;
-				qp->range.max.asChar = min;
-				qp->range.wildcard = (wc) ? 1 : 0;
-				qp->allRanges[i].min.asChar = min;
-				qp->allRanges[i].max.asChar = min;
-				qp->allRanges[i].wildcard = (wc) ? 1 : 0;
-			}
-			//TODO: compare mins and maxes
+			if (foundWC) continue;
+
 			qp->allRanges[i].min.asChar = min;
-			qp->allRanges[i].max.asChar = min;
-			qp->allRanges[i].wildcard = (wc) ? 1 : 0;
+			qp->allRanges[i].lex.minLen = strlen(min);
+			qp->allRanges[i].lex.wildcard = (wc) ? 1 : 0;
+
+			
+			if (qp->allRanges[i].lex.wildcard && qp->allRanges[i].lex.minLen == 0) {
+				/*
+					we've found a wildcard...everything counts
+				*/
+				qp->needsSatifying = 0;
+				qp->comp.gt = SpCompWildCard;
+				qp->comp.lt = SpCompWildCard;
+				qp->range.min.asChar = min;
+				qp->range.max.asChar = RedisModule_StringPtrLen(RedisModule_CreateStringPrintf(ctx, "%s%c",min, 0xff), NULL);;
+				qp->range.lex.maxLen = ++qp->range.lex.minLen;
+
+				if (qp->allRanges) RedisModule_Free(qp->allRanges);
+				if (qp->comps) RedisModule_Free(qp->comps);
+
+				qp->allRanges = NULL;
+				qp->comps = NULL;
+				foundWC = 1;
+				continue;
+			}
+			if (wc) {
+				qp->allRanges[i].max.asChar = RedisModule_StringPtrLen(RedisModule_CreateStringPrintf(ctx, "%s%c",max, 0xff), NULL);
+				qp->allRanges[i].lex.maxLen = ++qp->range.lex.minLen;
+				qp->comps[i].gt = SpCompLexGTE;
+				qp->comps[i].lt = SpCompLexLTE;
+			} else {
+				qp->allRanges[i].max.asChar = min;
+				qp->allRanges[i].lex.maxLen = qp->range.lex.minLen;
+				qp->comps[i].gt = SpCompLexEQ;
+				qp->comps[i].lt = SpCompLexEQ;
+			}
+
+			if (i == 0) {
+				qp->range.lex.rawMax = max;
+				qp->range.min.asChar = min;
+				qp->range.lex.minLen = strlen(min);
+				qp->range.max.asChar = RedisModule_StringPtrLen(RedisModule_CreateStringPrintf(ctx, "%s%c",max, 0xff), NULL);
+				qp->range.lex.maxLen = ++qp->range.lex.minLen;
+				qp->comp.gt = SpCompLexGTE;
+				qp->comp.lt = SpCompLexLTE;
+			} else {
+				if (strcmp(qp->allRanges[i].min.asChar, qp->range.min.asChar) < 0) {
+					qp->range.min.asChar = qp->allRanges[i].min.asChar;
+					qp->range.lex.minLen = strlen(qp->range.min.asChar) + 1;
+				}
+				if (strcmp(max, qp->range.lex.rawMax) > 0) {
+					qp->range.lex.rawMax = max;
+					qp->range.max.asChar = RedisModule_StringPtrLen(RedisModule_CreateStringPrintf(ctx, "%s%c",max, 0xff), NULL);
+					qp->range.lex.maxLen = strlen(max) + 1;
+				}
+			}			
 		}
 	} else {
+
 		min = RedisModule_StringPtrLen(argv[++idx], NULL);
 		RedisModule_StringToLongLong(argv[++idx], &wc);
 		qp->range.min.asChar = min;
-		qp->range.max.asChar = min;
-		qp->range.wildcard = (wc) ? 1 : 0;
+		qp->range.lex.minLen = strlen(min);
+		qp->range.lex.wildcard = (wc) ? 1 : 0;
+
+		if (qp->range.lex.wildcard && qp->range.lex.minLen == 0) {
+			/*
+				we've found a wildcard...everything counts
+			*/
+			// printf("We have a wildcard\n");
+			qp->needsSatifying = 0;
+			qp->range.max.asChar = RedisModule_StringPtrLen(RedisModule_CreateStringPrintf(ctx, "%s%c",min, 0xff), NULL);;
+			qp->range.lex.maxLen = ++qp->range.lex.minLen;
+
+			qp->comp.gt = SpCompWildCard;
+			qp->comp.lt = SpCompWildCard;
+			// RedisModule_Free(qp->allRanges);
+			// RedisModule_Free(qp->comps);
+			qp->allRanges = NULL;
+			qp->comps = NULL;
+			(*argIdx) = idx;
+			return REDISMODULE_OK;
+		}
 		if (wc) {
+			//using auto-memory. thi will be cleaned up for us (++bump auto-memory)
+			qp->range.max.asChar = RedisModule_StringPtrLen(RedisModule_CreateStringPrintf(ctx, "%s%c",min, 0xff), NULL);;
+			qp->range.lex.maxLen = ++qp->range.lex.minLen;
 			qp->comp.gt = SpCompLexGTE;
 			qp->comp.lt = SpCompLexLTE;
 		} else {
+			qp->range.max.asChar = min;
 			qp->comp.gt = SpCompLexEQ;
 			qp->comp.lt = SpCompLexEQ;
 		}
+		
 	}
-
 	(*argIdx) = idx;
 	return REDISMODULE_OK;
 }
@@ -229,6 +482,7 @@ static int SpredisPopulateQueryParts(RedisModuleCtx *ctx, SPCompositeScoreCont *
 				return parseRes;
 			}
 		}
+		qp[i].valueIndex = i;
 		argIdx++;
 	}
 	return REDISMODULE_OK;
@@ -237,7 +491,7 @@ static int SpredisPopulateQueryParts(RedisModuleCtx *ctx, SPCompositeScoreCont *
 static int SPCompGT(SPPtrOrD_t *val, SPCompQueryPart *qp, uint8_t valueCount) {
 	for (uint8_t i = 0; i < valueCount; ++i)
 	{
-		if (!qp[i].comp.gt(val[i], qp[i].range.min)) return 0;
+		if (!qp[i].comp.gt(val[i], qp[i].range.min, qp[i].range.lex.minLen)) return 0;
 	}
 	return 1;
 }
@@ -245,7 +499,7 @@ static int SPCompGT(SPPtrOrD_t *val, SPCompQueryPart *qp, uint8_t valueCount) {
 static int SPCompLT(SPPtrOrD_t *val, SPCompQueryPart *qp, uint8_t valueCount) {
 	for (uint8_t i = 0; i < valueCount; ++i)
 	{
-		if (!qp[i].comp.lt(val[i], qp[i].range.max)) return 0;
+		if (!qp[i].comp.lt(val[i], qp[i].range.max, qp[i].range.lex.maxLen)) return 0;
 	}
 	return 1;
 }
@@ -254,11 +508,12 @@ static void SPCompProduceRes(SPKeyVec *vecp, khash_t(SIDS) *res, khash_t(SIDS) *
 	SPKeyVec vec = vecp[0];
 	if (kv_size(vec) == 0) return;
 	SPCompositeScoreSetKey *largest = NULL, *current;
-
+	size_t total = 0;
 	//TODO: opportunity for parallel processing here?
 	if (hint == NULL) {
 		for (int i = 0; i < kv_size(vec); ++i)
 		{
+			total += kh_size(kv_A(vec,i)->members->set);
 			if (kv_A(vec,i) == NULL) continue;
 			if (largest) {
 				if (kh_size(kv_A(vec,i)->members->set) > kh_size(largest->members->set)) largest = kv_A(vec,i);
@@ -270,8 +525,8 @@ static void SPCompProduceRes(SPKeyVec *vecp, khash_t(SIDS) *res, khash_t(SIDS) *
 		kh_dup_set(spid_t, res, largest->members->set);
 		for (int i = 0; i < kv_size(vec); ++i)
 		{
-			if (current == NULL || current == largest) continue;
 			current = kv_A(vec,i);
+			if (current == NULL || current == largest) continue;
 			SPAddAllToSet(res, current, hint);
 		}	
 	} else {
@@ -282,14 +537,66 @@ static void SPCompProduceRes(SPKeyVec *vecp, khash_t(SIDS) *res, khash_t(SIDS) *
 			SPAddAllToSet(res, current, hint);
 		}
 	}
+	// printf("Total found: %zu, %zu\n", total, kh_size(res));
 }
 SPKeyVec SPCompGetSatisfaction(
 	SPKeyVec *candidates, 
-	SPCompQueryPart *qp, 
-	uint8_t valueCount)
+	void *ptr, 
+	uint8_t valueCount, 
+	khash_t(SIDS) *res, 
+	khash_t(SIDS) *hint,
+	int *defers,
+	SPKeyVec *leftOverCand)
 {
 
-	//TODO: GEO filtering
+	SPCompQueryPart *qpa = ptr;
+	SPCompQueryPart qp;
+	SPKeyVec leavings, leftovers;
+	kv_init(leavings);
+	size_t li, leavingsCount;
+	int satisfyCount = 0, deferCount = 0;
+
+	for (uint8_t i = 0; i < valueCount; ++i)
+	{
+		qp = qpa[i];
+		if (qp.needsSatifying && qp.satisfy) {
+			if (satisfyCount == 0) {
+				if (qp.satisfy(candidates, &qp, res, hint, &leavings)) {
+					deferCount++;
+					// geo by radius field
+				} else {
+					satisfyCount++;
+				}
+			} else {
+				// keep trimming down the leavings until we are done
+				kv_init(leftovers);
+				if (qp.satisfy(&leavings, &qp, res, hint, &leftovers)) {
+					deferCount++;
+					// geo by radius field
+				} else {
+					satisfyCount++;
+					leavingsCount = kv_size(leavings);
+					for (li = 0; li < leavingsCount; ++li)
+					{
+						if (kv_A(leavings, li)) {
+							kv_push(SPCompositeScoreSetKey*, *candidates, kv_A(leavings, li));
+						}
+					}
+					kv_destroy(leavings);
+					leavings = leftovers;
+				}
+				
+			}
+		}
+	}
+
+	if (satisfyCount > 1 && deferCount == 0) {
+		kv_destroy(leftovers);
+	} else if (deferCount) {
+		(*leftOverCand) = leftovers;
+	}
+	if (&leavings != candidates) kv_destroy(leavings);
+	(*defers) = deferCount;
 	return *candidates;
 }
 
@@ -303,7 +610,6 @@ static void SpredisDoCompositeSearch(SPCompositeScoreCont *cont,
 	SPPtrOrD_t *value = RedisModule_Calloc(valueCount, sizeof(SPPtrOrD_t));
 	SPPtrOrD_t *uvalue = RedisModule_Calloc(valueCount, sizeof(SPPtrOrD_t));
 	uint8_t satisfyCount = 0;
-
 	for (uint8_t i = 0; i < valueCount; ++i)
 	{
 		value[i] = qp[i].range.min;
@@ -317,71 +623,103 @@ static void SpredisDoCompositeSearch(SPCompositeScoreCont *cont,
 	SPCompositeScoreSetKey search = {.compCtx = cont->compCtx, .value = value};
 	SPCompositeScoreSetKey usearch = {.compCtx = cont->compCtx, .value = uvalue};
 
-	kb_intervalp(COMPIDX, btree, &search, &l, &u);
 
-	use = u == NULL ? l : u;
-	u = NULL;
-	kb_intervalp(COMPIDX, btree, &usearch, &l, &u);
-	last = u;
-
+	
 	kbitr_t itr;
-	int reached = 0;
-	kb_itr_getp(COMPIDX, btree, use, &itr);
-	// printf("use NULL %d\n", use == NULL);
-	SPKeyVec candidates;
+	
+	SPKeyVec candidates, leavings;
 	kv_init(candidates);
 	SPCompQueryComparator *qcs;
 	SPCompQueryComparator cqc;
-	SPCompQueryPart cqp;
+	SPCompQueryPart cqp, first;
 	uint32_t cri;
-	SPCompRange cr;
-    for (; kb_itr_valid(&itr); kb_itr_next(COMPIDX, btree, &itr)) { 
-    	candKey = (&kb_itr_key(SPCompositeScoreSetKey, &itr));
-		if (candKey == NULL) continue;
-		if (reached || SPCompGT(candKey->value, qp, valueCount)) {
-			// printf("A\n");
-            if (SPCompLT(candKey->value, qp, valueCount)) {
-            	// printf("B\n");
-                reached = 1;
-                cv = 0;
-                doAdd = 0;
-                while (cv < valueCount) {
-                	// printf("C\n");
-                	cqp = qp[cv];
-                	qcs = cqp.comps;
-                	if (qcs) {
-                		cri = 0;
-                		//this is essentially a  list of or's
-                		while (cri < cqp.rangeCount) {
-                			cr = cqp.allRanges[cri];
-                			cqc = qcs[cri++];
-                			if (cqc.gt(candKey->value[cv], cr.min) && cqc.lt(candKey->value[cv], cr.max)) {
-                				doAdd++;
-                				break;
-                			}
-                		}
-                	} else {
-                		// printf("D\n");
-                		doAdd++;
-                	}
-                	cv++;
-                }
-                if (doAdd == valueCount) {
-                	// printf("E\n");
-                	kv_push(SPCompositeScoreSetKey*, candidates, candKey);	
-                }
-            } else if (candKey == last) {
-            	// printf("F\n");
-                break;
-            }
-        }
-    }
+	SPCompRange cr, *firstRange;
+	khash_t(PTR) *ptrHash = kh_init(PTR);
+	khint_t k;
+	int absent;
+
+	first = qp[0];
+	/* 
+		do a pass for each value of the first index. 
+		if we have a 'in/or' clause up first where values are far apart, we will generate a lot of misses
+		example: make in ['A4', 'X3'] will essentially induce a whole index scan which will be very inefficient,
+		if it's later in the index, it's not as big of a problem since thre previous values will have shurnken the number of
+		candidates
+	*/
+	for (int i = 0; i < first.rangeCount; ++i)
+	{
+		
+		firstRange = first.allRanges ? &first.allRanges[i] : &first.range;
+		use = NULL;
+		last = NULL;
+		search.value[0] = firstRange->min;
+		usearch.value[0] = firstRange->max;
+		first.range.min = firstRange->min;
+		first.range.min = firstRange->max;
+
+		kb_intervalp(COMPIDX, btree, &search, &l, &u);
+		use = u == NULL ? l : u;
+		u = NULL;
+		kb_intervalp(COMPIDX, btree, &usearch, &l, &u);
+		last = u;
+		kb_itr_getp(COMPIDX, btree, use, &itr);
+
+	    for (; kb_itr_valid(&itr); kb_itr_next(COMPIDX, btree, &itr)) { 
+	    	candKey = (&kb_itr_key(SPCompositeScoreSetKey, &itr));
+			if (candKey == NULL) continue;
+
+			//have we run into this key before? we're going to do multiple passes on the first index value, so it's possible
+			k = kh_get(PTR, ptrHash, (uint64_t)candKey);
+			if (k != kh_end(ptrHash)) continue;
+
+			if (SPCompGT(candKey->value, qp, valueCount) && SPCompLT(candKey->value, qp, valueCount)) {
+				cv = 1;
+				doAdd = 1; //we've already tested the first value.
+				while (cv < valueCount) {
+					cqp = qp[cv];
+					qcs = cqp.comps;
+					if (qcs != NULL) {
+						cri = 0;
+						//this is essentially a  list of or's
+						while (cri < cqp.rangeCount) {
+							cr = cqp.allRanges[cri];
+							cqc = qcs[cri];
+							if (cqc.gt(candKey->value[cv], cr.min, cr.lex.minLen) && cqc.lt(candKey->value[cv], cr.max, cr.lex.maxLen)) {
+								doAdd++;
+								break;
+							}
+							cri++;
+						}
+					} else {
+						doAdd++;
+					}
+					cv++;
+					if (doAdd != cv) break;
+				}
+				if (doAdd == valueCount) {
+					kh_put(PTR, ptrHash, (uint64_t)candKey, &absent);
+					kv_push(SPCompositeScoreSetKey*, candidates, candKey);	
+				}
+	            if (candKey == last) {
+	                break;
+	            }
+	        }
+
+	    }
+	}
+
+	
+    int defers = 0;
     if (satisfyCount) {
-    	candidates = SPCompGetSatisfaction(&candidates, qp, valueCount);
+    	candidates = SPCompGetSatisfaction(&candidates, qp, valueCount, res, hint, &defers, &leavings);
     }
+    SPCompProduceRes(&candidates, res, hint);
+    if (defers) {
+    	kv_destroy(leavings);
+    }
+    kh_destroy(PTR,ptrHash);
     RedisModule_Free(value);
     RedisModule_Free(uvalue);
-    SPCompProduceRes(&candidates, res, hint);
     kv_destroy(candidates);
 }
 
@@ -436,31 +774,38 @@ static int SpredisCompStoreRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleS
     
     khash_t(SIDS) *hint = SPGetCompHint(ctx, argv[3], &hintRes);
     if (hintRes != REDISMODULE_OK) {
+    	SPUnlockContext(ctx);
+
+    	printf("err %d\n", 13);
     	return RedisModule_ReplyWithLongLong(ctx,0);
     }
     SpredisSetRedisKeyValueType(store, SPSETTYPE, resCont);
 	SPUnlockContext(ctx);
 
 	if (keyOk != REDISMODULE_OK) {
+		printf("err %d\n", 14);
 		return keyOk;
 	}
 	if (cont == NULL) {
+		printf("err %d, %s\n", 15, RedisModule_StringPtrLen(argv[2], NULL));
 		return RedisModule_ReplyWithLongLong(ctx, 0);
 	}
 
 	SpredisProtectWriteMap(cont);
 	if (cont->compCtx->valueCount == 0) {
 		SpredisUnProtectMap(cont);
+		printf("err %d\n", 16);
 		return RedisModule_ReplyWithLongLong(ctx, 0);
 	}
 	//start working magic
 	SPCompQueryPart *qp = RedisModule_Calloc(cont->compCtx->valueCount, sizeof(SPCompQueryPart));
 	// SPCompQueryComparator *qq = RedisModule_Calloc(cont->compCtx->valueCount, sizeof(SPCompQueryComparator));
-
 	int popRes = SpredisPopulateQueryParts(ctx, cont, qp, argv, argc);
 	if (popRes == REDISMODULE_OK) {
 		SpredisDoCompositeSearch(cont, res, hint, qp);
-	} 
+	} else {
+		printf("err %d\n", 17);
+	}
 	for (uint8_t i = 0; i < cont->compCtx->valueCount; ++i)
 	{
 		SPCompQueryPart cqp = qp[i];

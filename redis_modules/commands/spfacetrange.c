@@ -37,8 +37,8 @@ int SpredisFacetRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **arg
     	SPLockContext(ctx);
 
     	fkey = RedisModule_OpenKey(ctx, argv[argIndex++], REDISMODULE_READ);
-    	rangeRes1 = RedisModule_StringToDouble(argv[argIndex++], &(facet->min));
-    	rangeRes2 = RedisModule_StringToDouble(argv[argIndex++], &(facet->max));
+    	rangeRes1 = SpredisStringToDouble(argv[argIndex++], &(facet->min));
+    	rangeRes2 = SpredisStringToDouble(argv[argIndex++], &(facet->max));
 		RedisModule_StringToLongLong(argv[argIndex++], &(facet->minExcl));
 		RedisModule_StringToLongLong(argv[argIndex++], &(facet->maxExcl));
     	facet->label = RedisModule_StringPtrLen(argv[argIndex++], NULL);
@@ -47,10 +47,13 @@ int SpredisFacetRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **arg
     			facet->field = NULL;
 		    } else {
 		    	facet->field = RedisModule_ModuleTypeGetValue(fkey);
-		    	SpredisProtectReadMap(facet->field);//, "SpredisFacetRange_RedisCommandT");
+		    	SPUnlockContext(ctx);
+		    	SpredisProtectReadMap(facet->field, "SpredisFacetRange_RedisCommandT");
 		    }
+    	} else {
+    		SPUnlockContext(ctx);	
     	}
-    	SPUnlockContext(ctx);
+    	
     }
 	SpredisSortData **datas = res->data;
 	SpredisSortData *d;
