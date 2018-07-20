@@ -13,6 +13,13 @@ extern "C" {
 
 /* =================================== API ======================================= */
 
+typedef struct _threadpool_job {
+	struct _threadpool_job*  prev;                   /* pointer to previous job   */
+	void   (*function)(void* arg);       /* function pointer          */
+	void*  arg;                          /* function's argument       */
+	pthread_mutex_t mutex;
+	pthread_cond_t   cond;
+} threadpool_job;
 
 typedef struct thpool_* threadpool;
 
@@ -65,7 +72,7 @@ threadpool thpool_init(int num_threads);
  * @return 0 on successs, -1 otherwise.
  */
 int thpool_add_work(threadpool, void (*function_p)(void*), void* arg_p);
-
+threadpool_job *thpool_get_job(threadpool, void (*function_p)(void*), void* arg_p);
 
 /**
  * @brief Wait for all queued jobs to finish

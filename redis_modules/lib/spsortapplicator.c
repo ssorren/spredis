@@ -1,6 +1,7 @@
 #include "../spredis.h"
 #include "./kvec.h"
 #include <pthread.h>
+#include <float.h>
 
 // KV_INIT(SPScoreCont);
 #define SORTINTERVAL 30;
@@ -79,11 +80,12 @@ void *SPSortQApplyThread(void *x_void_ptr) {
 		
 		SP_WAIT_WLOCK(SPRESORTQ->lock);
 		while (kv_size(SPRESORTQ->q)) {
+			printf("Sorting...\n");
 			SPRESORTQ->resorting = kv_pop(SPRESORTQ->q);
 			if (SPRESORTQ->resorting == NULL) continue;
 			SpredisProtectReadMap(SPRESORTQ->resorting, "SPSortQApplyThread");
 
-			double newScore = 0;
+			double newScore = DBL_MIN;
 		    SPScoreSetKey *skey;
 		    kbitr_t itr;
 		    // loop through and bump the score by one for each entry
@@ -92,7 +94,7 @@ void *SPSortQApplyThread(void *x_void_ptr) {
 		    // pthread_mutex_lock(&SPRESORTQ->resorting->sortlock);
 		    // printf("Locking A...\n");
 		    SpredisSortWriteLock();
-		    // printf("Locked A...\n");
+		    
 		    while (kb_itr_valid(&itr)) {
 		        skey = &kb_itr_key(SPScoreSetKey, &itr);
 		        if (skey != NULL && skey->members != NULL) {
@@ -103,10 +105,11 @@ void *SPSortQApplyThread(void *x_void_ptr) {
 		    SpredisSortUnLock();
 		    // printf("UnLocked A...\n");
 		    // pthread_mutex_unlock(&SPRESORTQ->resorting->sortlock);
-			SpredisUnProtectMap(SPRESORTQ->resorting);//, "SPSortQApplyThread");
+			SPRWUnlock(SPRESORTQ->resorting);//, "SPSortQApplyThread");
 			SPRESORTQ->resorting = NULL;
 			// go back to normal speed. wait 10 seconds, let the q build up
 			sleepSeconds = SORTINTERVAL;
+			printf("...Done Sorting\n");
 		}
 		SP_ULOCK(SPRESORTQ->lock);
 		

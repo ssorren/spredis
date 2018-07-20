@@ -32,7 +32,7 @@ void SPLexScoreContDestroy(SPScoreCont *cont) {
     //  RedisModule_Free(score);
     // });
     kh_destroy(SORTTRACK, cont->st);
-    SpredisUnProtectMap(cont);//, "SPLexScoreContDestroy");
+    SPRWUnlock(cont);//, "SPLexScoreContDestroy");
     pthread_rwlock_destroy(&cont->mutex);
     // pthread_mutex_destroy(&(cont->sortlock));
     RedisModule_Free(cont);
@@ -45,7 +45,7 @@ void SpredisZLexSetRDBSave(RedisModuleIO *io, void *ptr) {
     // SpredisProtectReadMap(cont);//, "SpredisZLexSetRDBSave");
     RedisModule_SaveSigned(io, cont->sort);
     SPWriteLexSetToRDB(io, cont->btree);
-    // SpredisUnProtectMap(cont);//, "SpredisZLexSetRDBSave");
+    // SPRWUnlock(cont);//, "SpredisZLexSetRDBSave");
 }
 
 
@@ -73,7 +73,7 @@ void *SpredisZLexSetRDBLoad(RedisModuleIO *io, int encver) {
     SpredisProtectWriteMap(cont);//, "SpredisZLexSetRDBLoad");
     cont->sort = RedisModule_LoadSigned(io);
     SPReadLexSetFromRDB(io, cont->btree, (cont->sort ? cont->st : NULL));
-    SpredisUnProtectMap(cont);
+    SPRWUnlock(cont);
     if (cont->sort) {
         SpredisQSort(cont);
     }
@@ -98,11 +98,12 @@ void SpredisZLexSetFreeCallback(void *value) {
 int SPLexScorePutValue(SPScoreCont *cont, spid_t id, const char *lexValue, int sort) {
 	SpredisProtectWriteMap(cont);//, "SPLexScorePutValue");
     if (sort) cont->sort = sort;
-    int resort;
+    int resort = 0;
     SPPtrOrD_t val = {.asChar = lexValue};
     SPAddLexScoreToSet(cont->btree, (sort ? cont->st : NULL), id, val, sort ? &resort : NULL);
-    SpredisUnProtectMap(cont);
+    SPRWUnlock(cont);
     if (sort && resort) {
+        // printf("Sorting because of %s\n", lexValue);
         SpredisQSort(cont);
     }
 	int res = 1;
@@ -116,7 +117,7 @@ int SPLexScoreDel(SPScoreCont *cont, spid_t id, const char *lexValue) {
     // val.asChar = (char *)lexValue;
     SPRemLexScoreFromSet(cont->btree, (cont->sort ? cont->st : NULL), id, val);
 	int res = 0;
-	SpredisUnProtectMap(cont);//, "SPLexScoreDel");
+	SPRWUnlock(cont);//, "SPLexScoreDel");
 	return res;
 }
 
@@ -185,66 +186,48 @@ int SpredisZLexSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv
 
 int SpredisZLexLinkSet_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // RedisModule_AutoMemory(ctx);
+
+    RedisModuleKey *key;
+    SPNamespace *ns = NULL;
     SPLockContext(ctx);
-    RedisModuleKey *key = RedisModule_OpenKey(ctx,argv[1],
-            REDISMODULE_READ);
 
-    RedisModuleKey *store = RedisModule_OpenKey(ctx,argv[2],
-            REDISMODULE_WRITE);
-
-    const char * value = RedisModule_StringPtrLen(argv[3], NULL);
-
-    int keyType;
-
-    if (HASH_NOT_EMPTY_AND_WRONGTYPE(key, &keyType, SPZLSETTYPE) != 0) {
-        SPUnlockContext(ctx);
-        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);   
-    }
-    if (keyType == REDISMODULE_KEYTYPE_EMPTY) {
-        SPUnlockContext(ctx);
-        RedisModule_ReplyWithNull(ctx);
-        return REDISMODULE_OK;
-    }
-
-    if (HASH_NOT_EMPTY(store)) {
-        SPUnlockContext(ctx);
-        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);   
-    }
-
-    SPScoreCont *cont = RedisModule_ModuleTypeGetValue(key);
+    int keyOk = SPGetNamespaceKeyValue(ctx, &key, &ns, argv[1], REDISMODULE_READ);
+    
     SPUnlockContext(ctx);
-    // printf("Linking\n");
-    SpredisProtectReadMap(cont, "SpredisZLexLinkSet_RedisCommand");
+    if (keyOk != REDISMODULE_OK) {
+        return keyOk;
+    }
+    if (ns == NULL) {
+        return RedisModule_ReplyWithLongLong(ctx,0);
+    }
+    
+    SPReadLock(ns->lock);
+    SPIndexCont * cont = SPIndexForFieldName(ns, argv[2]);
+    if (cont == NULL || cont->type != SPTreeIndexType) {
+        SPReadUnlock(ns->lock);
+        if (cont != NULL) return RedisModule_ReplyWithError(ctx, "wrong index type");
+        return RedisModule_ReplyWithLongLong(ctx,0);    
+    }
+    khash_t(SIDS) *res = SPGetTempSet(argv[3]);
+
+    const char * value = RedisModule_StringPtrLen(argv[4], NULL);
+
     SPScoreSetKey *p;
     SPScoreSetKey search = {.value.asChar = value};
-    // search.value.asChar = (char *)value;
-    SpredisSetCont *result;
-    p = kb_getp(LEXSET, cont->btree, &search);
-    // if (p) {
-    //     result = _SpredisInitWithLinkedSet(p->members->set, cont->mutex);
-    // } else {
-    
-    // }
-    result = _SpredisInitSet();
-    if (p) {
-        // if (kh_size(p->members->set)) {
-        //     kh_resize(SIDS, result->set, p->members->set->n_buckets);
-        // }
-        kh_dup_set(spid_t, result->set, p->members->set);
-        // SPAddAllToSet(result->set, p, (khash_t(SIDS)*)NULL);
-    }
-    
-    SpredisUnProtectMap(cont);//, "SpredisZLexLinkSet_RedisCommand");
+    SPReadLock(cont->lock);
+    p = kb_getp(LEXSET, cont->index.btree, &search);
 
-    SPLockContext(ctx);
-    SpredisSetRedisKeyValueType(store, SPSETTYPE, result);
-    SPUnlockContext(ctx);
-    RedisModule_ReplyWithLongLong(ctx, kh_size(result->set));
+    if (p) {
+        kh_dup_set(spid_t, res, p->members->set);
+    }
+    SPReadUnlock(cont->lock);
+    SPReadUnlock(ns->lock);
+    RedisModule_ReplyWithLongLong(ctx, kh_size(res));
 	
     return REDISMODULE_OK;
 }
 int SpredisZLexLinkSet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    if (argc != 4) return RedisModule_WrongArity(ctx);
+    if (argc != 5) return RedisModule_WrongArity(ctx);
     return SPThreadedWork(ctx, argv, argc, SpredisZLexLinkSet_RedisCommandT);
 }
 
@@ -279,7 +262,7 @@ int SpredisZLexSetApplySortScores_RedisCommand(RedisModuleCtx *ctx, RedisModuleS
   //   }
     RedisModule_ReplyWithSimpleString(ctx, "OK");
     // RedisModule_CloseKey(key);
-    SpredisUnProtectMap(cont);//, "SpredisZLexSetApplySortScores_RedisCommand");
+    SPRWUnlock(cont);//, "SpredisZLexSetApplySortScores_RedisCommand");
     RedisModule_ReplicateVerbatim(ctx);
     return REDISMODULE_OK;
 }
@@ -302,7 +285,7 @@ int SpredisZLexSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **arg
     SPScoreCont *dhash = RedisModule_ModuleTypeGetValue(key);
     // SpredisProtectReadMap(dhash);//, "SpredisZLexSetCard_RedisCommand");
     RedisModule_ReplyWithLongLong(ctx,kb_size(dhash->btree));
-    // SpredisUnProtectMap(dhash);//, "SpredisZLexSetCard_RedisCommand");
+    // SPRWUnlock(dhash);//, "SpredisZLexSetCard_RedisCommand");
     // RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }

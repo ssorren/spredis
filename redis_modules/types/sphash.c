@@ -63,7 +63,7 @@ void SpredisHashRDBSave(RedisModuleIO *io, void *ptr) {
 			}
 		});
     });
-	// SpredisUnProtectMap(cont);//,"SpredisHashRDBSave");
+	// SPRWUnlock(cont);//,"SpredisHashRDBSave");
 }
 
 void SpredisHashRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value) {
@@ -88,7 +88,7 @@ void SpredisHashRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *va
 			}
 		});
     });
-	// SpredisUnProtectMap(cont);//, "SpredisHashRewriteFunc");
+	// SPRWUnlock(cont);//, "SpredisHashRewriteFunc");
 }
 
 void *SpredisHashRDBLoad(RedisModuleIO *io, int encver) {
@@ -142,7 +142,7 @@ void SpredisHashDestroy(void *value) {
 		RedisModule_Free(hv);
     });
     kh_destroy(HASH, cont->set);
-    SpredisUnProtectMap(cont);//, "SpredisHashDestroy");
+    SPRWUnlock(cont);//, "SpredisHashDestroy");
     pthread_rwlock_destroy(&cont->mutex);
     RedisModule_Free(cont);
 }
@@ -228,7 +228,7 @@ int SpredisHashSet(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, SPHa
         	// }
         	
         }
-        SpredisUnProtectMap(cont);//, "SpredisHashSet");
+        SPRWUnlock(cont);//, "SpredisHashSet");
     }
     kv_destroy(ids);
     kv_destroy(poss);
@@ -325,7 +325,7 @@ int SpredisHashDel_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, i
 	    	}
     	}
     }
-    SpredisUnProtectMap(cont);//, "SpredisHashDel_RedisCommand");
+    SPRWUnlock(cont);//, "SpredisHashDel_RedisCommand");
     if (kh_size(cont->set) == 0) {
         RedisModule_DeleteKey(key);
     }

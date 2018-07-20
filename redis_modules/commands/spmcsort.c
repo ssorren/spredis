@@ -34,14 +34,14 @@ void SpredisZsetMultiKeySortInit() {
 typedef struct _SPThreadedSortArg {
     // RedisModuleBlockedClient *bc;
     unsigned int count;
-    SpredisSortData **datas;
+    SpredisSortData *datas;
     SpredisColumnData *mcd;
     SpredisSetCont *set;
 } SPThreadedSortArg;
 
 typedef struct {
     SpredisColumnData *mcd;
-    SpredisSortData **datas;
+    SpredisSortData *datas;
     size_t start, end;
 } SPPopScoreArg;
 // static inline double _SpredisSortDMapValue(SpredisDMapCont *cont, size_t id) {
@@ -81,7 +81,7 @@ void _SPResolveScore(SPPtrOrD_t value, void *input, double *score) {
 void SPPopulateScores(void *arg) {
     SPPopScoreArg *targ = arg;
     SpredisColumnData *mcd = targ->mcd;
-    SpredisSortData **datas = targ->datas;
+    SpredisSortData *datas = targ->datas;
     SpredisSortData *d;
     
     khint_t kk;
@@ -93,7 +93,7 @@ void SPPopulateScores(void *arg) {
     // printf("Doing work for %zu - %zu\n", targ->start, targ->end);
     for (size_t i = targ->start; i < end; ++i)
     {
-        d = datas[i];
+        d = &datas[i];
         id = d->id;
         d->scores =  mcd->colCount ? RedisModule_Alloc(sizeof(double) * mcd->colCount) : NULL;
         k = mcd->colCount;
@@ -112,15 +112,18 @@ void SPThreadedSort(SPThreadedSortArg *targ) {
     size_t i = 0;
     khash_t(SIDS) *set = targ->set->set;
     SpredisColumnData *mcd = targ->mcd;
-    SpredisSortData **datas = targ->datas;
+    SpredisSortData *datas = targ->datas;
     SpredisSortData *d;
     uint64_t id;
 
     
     kh_foreach_key(set, id, {
-        d = RedisModule_Calloc(1, sizeof(SpredisSortData));
-        datas[i++] = d;
+        // d = RedisModule_Calloc(1, sizeof(SpredisSortData));
+        // datas[i++] = d;
+        // datas[i++].id = id;
+        d = &datas[i++];
         d->id = id;
+        d->scores = NULL;
     });
     if (mcd->colCount > 0) {
         // printf("Locking B\n");
@@ -162,7 +165,7 @@ void SPThreadedSort(SPThreadedSortArg *targ) {
 
     // printf("%s\n", "WTF3");
     
-        SpredisSpredisSortDataSort(targ->count, datas, mcd);    
+        SpredisSpredisSortDataSort(targ->count, &datas, mcd);    
     }
 }
 
@@ -194,9 +197,9 @@ int SpredisIntroSortSset(RedisModuleCtx *ctx, RedisModuleKey *zkey, SpredisSetCo
     SPThreadedSort(targ);
     j = mcd->colCount;
     while (j) {
-        SpredisUnProtectMap(mcd->cols[--j]);//, "SpredisIntroSortSset");
+        SPRWUnlock(mcd->cols[--j]);//, "SpredisIntroSortSset");
     }
-    SpredisUnProtectMap(cont);//, "SpredisIntroSortSset");
+    SPRWUnlock(cont);//, "SpredisIntroSortSset");
     
     SPThreadedSort_FreeArg(targ);
     RedisModule_ReplyWithSimpleString(ctx,"OK");
@@ -245,7 +248,7 @@ int SpredisFetchColumnsAndOrders(RedisModuleCtx *ctx, RedisModuleString **argv, 
 
 /* going to use a tree sort here, favoring performance over memory */
 int SpredisZsetMultiKeySort_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    RedisModule_AutoMemory(ctx);
+    // RedisModule_AutoMemory(ctx);
     if ( ((argc - 3) % 2) != 0 ) return RedisModule_WrongArity(ctx);
     SPLockContext(ctx);
     int columnCount = (argc - 3) / 2;
@@ -338,7 +341,7 @@ int SpredisExprResolve_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **ar
     double score;
     khint_t k;
     while(start < res->size && finalCount < count) {
-        id = res->data[start]->id;
+        id = res->data[start].id;
         k = kh_get(SORTTRACK, set, id);
         // RedisModule_ReplyWithArray(ctx, 2);
         // RedisModule_ReplyWithLongLong(ctx, 2);
@@ -352,7 +355,7 @@ int SpredisExprResolve_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **ar
         finalCount++;
         start++;
     }
-    SpredisUnProtectMap(exp);//, "SpredisExprResolve_RedisCommandT");
+    SPRWUnlock(exp);//, "SpredisExprResolve_RedisCommandT");
     RedisModule_ReplySetArrayLength(ctx, finalCount);
     return REDISMODULE_OK;
 }

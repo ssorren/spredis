@@ -20,6 +20,7 @@ void *SpredisTMPResRDBLoad(RedisModuleIO *io, int encver) {
 	res->data = NULL;//RedisModule_Alloc(sizeof(SpredisSortData*) * 0);
 	return res;
 }
+
 void SpredisTempResultModuleInit() {
 };
 
@@ -30,9 +31,9 @@ void _SpredisDestroyTmpResult(void *value) {
     if (tr->data != NULL) {
         for (int i = 0; i < tr->size; ++i)
         {
-            sd = tr->data[i];
-            if (sd != NULL && sd->scores != NULL) RedisModule_Free(sd->scores);
-            if (sd != NULL) RedisModule_Free(sd);
+            sd = &tr->data[i];
+            if (sd->scores != NULL) RedisModule_Free(sd->scores);
+            // if (sd != NULL) RedisModule_Free(sd);
         }
     }
     if (tr->data != NULL) RedisModule_Free(tr->data);
@@ -48,8 +49,7 @@ void SpredisTMPResFreeCallback(void *value) {
 }
 
 
-SpredisTempResult *SpredisTempResultCreate(RedisModuleCtx *ctx,RedisModuleString *keyName, size_t size) {
-
+SpredisTempResult *SpredisTempResultCreate(RedisModuleCtx *ctx, RedisModuleString *keyName, size_t size) {
     RedisModuleKey *key = RedisModule_OpenKey(ctx,keyName,
             REDISMODULE_WRITE);
     int keyType = RedisModule_KeyType(key);
@@ -58,11 +58,9 @@ SpredisTempResult *SpredisTempResultCreate(RedisModuleCtx *ctx,RedisModuleString
     }
 	SpredisTempResult *res = RedisModule_Alloc(sizeof(SpredisTempResult));
 	res->size = size;
-	res->data = RedisModule_Alloc(sizeof(SpredisSortData*) * size);
+	res->data = RedisModule_Alloc(sizeof(SpredisSortData) * size);
 	SpredisSetRedisKeyValueType(key,SPTMPRESTYPE,res);
-	// RedisModule_CloseKey(key);
 	return res;
-
 }
 
 int SpredisTMPResGetDocs_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -96,23 +94,19 @@ int SpredisTMPResGetDocs_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     int startOk = RedisModule_StringToLongLong(argv[3],&start);
     int countOk = RedisModule_StringToLongLong(argv[4],&count);
 
-    // printf("%s\n", "WTF3");
-    if (startOk == REDISMODULE_ERR || countOk == REDISMODULE_ERR) {
-        // RedisModule_CloseKey(key);
-        
+    if (startOk == REDISMODULE_ERR || countOk == REDISMODULE_ERR) {        
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
     }
-    // printf("%s %lld %lld %zu\n", "hmmm", start, count, res->size);
     SpredisProtectReadMap(dc, "SpredisTMPResGetDocs_RedisCommandT");
     long long finalCount = 0;    
-    SpredisSortData *d;
+    SpredisSortData d;
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     khint_t k;
     SPLZWCont *lzw;
     char *doc;
     while(start < res->size && finalCount < count) {
         d = res->data[start];
-        k = kh_get(LZW, dc->documents, d->id);
+        k = kh_get(LZW, dc->documents, d.id);
 
         if (k != kh_end(dc->documents)) {
             lzw = kh_value(dc->documents,k);
@@ -130,10 +124,7 @@ int SpredisTMPResGetDocs_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
         start++;
     }
     RedisModule_ReplySetArrayLength(ctx, finalCount);
-    SpredisUnProtectMap(dc);//, "SpredisTMPResGetDocs_RedisCommandT");
-    // printf("%s %lld\n", "WTF6", finalCount);
-    
-    // RedisModule_CloseKey(key);
+    SPRWUnlock(dc);
     return REDISMODULE_OK;
 }
 
@@ -151,15 +142,12 @@ int SpredisTMPResGetIds_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **ar
             REDISMODULE_READ);
     RedisModuleKey *valKey = RedisModule_OpenKey(ctx,argv[2],
             REDISMODULE_READ);
-    // printf("%s\n", "WTF1");
     int keyType;
     if (HASH_EMPTY_OR_WRONGTYPE(key, &keyType, SPTMPRESTYPE) != 0) {
-        // printf("%s\n", "WTF2");
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);   
     }
 
     if (HASH_EMPTY_OR_WRONGTYPE(valKey, &keyType, SPDOCTYPE) != 0) {
-        // printf("%s\n", "WTF2");
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);   
     }
 
@@ -172,20 +160,15 @@ int SpredisTMPResGetIds_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **ar
     int startOk = RedisModule_StringToLongLong(argv[3],&start);
     int countOk = RedisModule_StringToLongLong(argv[4],&count);
 
-    // printf("%s\n", "WTF3");
     if (startOk == REDISMODULE_ERR || countOk == REDISMODULE_ERR) {
-        // RedisModule_CloseKey(key);
-        
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
     }
-    // SpredisProtectReadMap(dc);//, "SpredisTMPResGetIds_RedisCommand");
-    // printf("%s %lld %lld %zu\n", "hmmm", start, count, res->size);
     long long finalCount = 0;    
     SpredisSortData *d;
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     khint_t k;
     while(start < res->size && finalCount < count) {
-        d = res->data[start];
+        d = &res->data[start];
         k = kh_get(RID, dc->revId, d->id);
         if (k != kh_end(dc->revId)) {
             RedisModule_ReplyWithStringBuffer(ctx, kh_value(dc->revId,k), strlen(kh_value(dc->revId,k)));
@@ -194,9 +177,5 @@ int SpredisTMPResGetIds_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **ar
         start++;
     }
     RedisModule_ReplySetArrayLength(ctx, finalCount);
-    // SpredisUnProtectMap(dc);//, "SpredisTMPResGetIds_RedisCommand");
-    // printf("%s %lld\n", "WTF6", finalCount);
-    
-    // RedisModule_CloseKey(key);
     return REDISMODULE_OK;
 }

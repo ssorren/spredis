@@ -116,6 +116,7 @@ LZ4LIB_API const char* LZ4_versionString (void);   /**< library version string; 
  * Reduced memory usage may improve speed, thanks to cache effect
  * Default value is 14, for 16KB, which nicely fits into Intel x86 L1 cache
  */
+// # define LZ4_MEMORY_USAGE 20
 #ifndef LZ4_MEMORY_USAGE
 # define LZ4_MEMORY_USAGE 14
 #endif
@@ -286,7 +287,8 @@ LZ4LIB_API int LZ4_compress_fast_continue (LZ4_stream_t* streamPtr, const char* 
  */
 LZ4LIB_API int LZ4_saveDict (LZ4_stream_t* streamPtr, char* safeBuffer, int maxDictSize);
 
-
+char *LZ4_dict(LZ4_stream_t* LZ4_dict);
+int LZ4_dictSize(LZ4_stream_t* LZ4_dict);
 /*-**********************************************
 *  Streaming Decompression Functions
 *  Bufferless synchronous API

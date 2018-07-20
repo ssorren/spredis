@@ -422,12 +422,13 @@ static int SpredisBuildLexQueryPart(RedisModuleCtx *ctx, SPCompQueryPart *qp, Re
 	(*argIdx) = idx;
 	return REDISMODULE_OK;
 }
-static int SpredisPopulateQueryParts(RedisModuleCtx *ctx, SPCompositeScoreCont *cont, SPCompQueryPart *qp, RedisModuleString **argv, int argc) {
+
+static int SpredisPopulateQueryParts(RedisModuleCtx *ctx, SPIndexCont *cont, SPCompQueryPart *qp, RedisModuleString **argv, int argc) {
 	uint8_t count = cont->compCtx->valueCount;
 	int parseRes;
 	uint8_t type, i;
 	long long ltype, qcount;
-	int argIdx = 4;
+	int argIdx = 5;
 
 	for (i = 0; i < count; ++i)
 	{
@@ -600,7 +601,7 @@ SPKeyVec SPCompGetSatisfaction(
 	return *candidates;
 }
 
-static void SpredisDoCompositeSearch(SPCompositeScoreCont *cont, 
+static void SpredisDoCompositeSearch(SPIndexCont *cont, 
 	khash_t(SIDS) *res, 
 	khash_t(SIDS) *hint, 
 	SPCompQueryPart *qp)
@@ -618,7 +619,7 @@ static void SpredisDoCompositeSearch(SPCompositeScoreCont *cont,
 			satisfyCount += 1;
 		}
 	}
-	kbtree_t(COMPIDX) *btree = cont->btree;
+	kbtree_t(COMPIDX) *btree = cont->index.compTree;
 	SPCompositeScoreSetKey *l, *u, *use, *candKey, *last;
 	SPCompositeScoreSetKey search = {.compCtx = cont->compCtx, .value = value};
 	SPCompositeScoreSetKey usearch = {.compCtx = cont->compCtx, .value = uvalue};
@@ -635,7 +636,7 @@ static void SpredisDoCompositeSearch(SPCompositeScoreCont *cont,
 	uint32_t cri;
 	SPCompRange cr, *firstRange;
 	khash_t(PTR) *ptrHash = kh_init(PTR);
-	khint_t k;
+	// khint_t k;
 	int absent;
 
 	first = qp[0];
@@ -655,7 +656,7 @@ static void SpredisDoCompositeSearch(SPCompositeScoreCont *cont,
 		search.value[0] = firstRange->min;
 		usearch.value[0] = firstRange->max;
 		first.range.min = firstRange->min;
-		first.range.min = firstRange->max;
+		first.range.max = firstRange->max;
 
 		kb_intervalp(COMPIDX, btree, &search, &l, &u);
 		use = u == NULL ? l : u;
@@ -669,9 +670,9 @@ static void SpredisDoCompositeSearch(SPCompositeScoreCont *cont,
 			if (candKey == NULL) continue;
 
 			//have we run into this key before? we're going to do multiple passes on the first index value, so it's possible
-			k = kh_get(PTR, ptrHash, (uint64_t)candKey);
-			if (k != kh_end(ptrHash)) continue;
-
+			// k = kh_get(PTR, ptrHash, (uint64_t)candKey);
+			// if (k != kh_end(ptrHash)) continue;
+			if (kh_contains(PTR, ptrHash, (uint64_t)candKey)) continue;
 			if (SPCompGT(candKey->value, qp, valueCount) && SPCompLT(candKey->value, qp, valueCount)) {
 				cv = 1;
 				doAdd = 1; //we've already tested the first value.
@@ -756,50 +757,41 @@ static khash_t(SIDS) *SPGetCompHint(RedisModuleCtx *ctx, RedisModuleString *name
 
 static int SpredisCompStoreRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 	RedisModuleKey *key;
-	SPCompositeScoreCont *cont;
+	SPNamespace *ns = NULL;
+
 	SPLockContext(ctx);
-	int keyOk = SPGetCompKeyValue(ctx, &key, &cont, argv[2], REDISMODULE_READ);
-	RedisModuleKey *store = RedisModule_OpenKey(ctx,argv[1],
-        REDISMODULE_WRITE|REDISMODULE_READ);
 
-    int storeType = RedisModule_KeyType(store);
-    if (HASH_NOT_EMPTY_AND_WRONGTYPE_CHECKONLY(store, &storeType ,SPSETTYPE) == 1) {;
-    	SPUnlockContext(ctx);
-    	printf("err %d\n", 12);
-        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
-    }
-	SpredisSetCont *resCont = _SpredisInitSet();
-    khash_t(SIDS) *res = resCont->set;
-    int hintRes;
-    
-    khash_t(SIDS) *hint = SPGetCompHint(ctx, argv[3], &hintRes);
-    if (hintRes != REDISMODULE_OK) {
-    	SPUnlockContext(ctx);
-
-    	printf("err %d\n", 13);
-    	return RedisModule_ReplyWithLongLong(ctx,0);
-    }
-    SpredisSetRedisKeyValueType(store, SPSETTYPE, resCont);
+	int keyOk = SPGetNamespaceKeyValue(ctx, &key, &ns, argv[1], REDISMODULE_READ);
+	
 	SPUnlockContext(ctx);
-
 	if (keyOk != REDISMODULE_OK) {
-		printf("err %d\n", 14);
 		return keyOk;
 	}
-	if (cont == NULL) {
-		printf("err %d, %s\n", 15, RedisModule_StringPtrLen(argv[2], NULL));
-		return RedisModule_ReplyWithLongLong(ctx, 0);
+	if (ns == NULL) {
+		return RedisModule_ReplyWithLongLong(ctx,0);
 	}
 
-	SpredisProtectWriteMap(cont);
+	khash_t(SIDS) *res = SPGetTempSet(argv[3]);
+    khash_t(SIDS) *hint = SPGetHintSet(argv[4]);
+    if (hint != NULL && kh_size(hint) == 0) return RedisModule_ReplyWithLongLong(ctx,0);
+
+	SPReadLock(ns->lock);
+	SPIndexCont * cont = SPIndexForFieldName(ns, argv[2]);
+	if (cont == NULL || cont->type != SPCompIndexType) {
+		SPReadUnlock(ns->lock);
+		if (cont != NULL) return RedisModule_ReplyWithError(ctx, "wrong index type");
+		return RedisModule_ReplyWithLongLong(ctx,0);	
+	}
+
+	SPReadLock(cont->lock);
 	if (cont->compCtx->valueCount == 0) {
-		SpredisUnProtectMap(cont);
+		SPReadUnlock(ns->lock);
+		SPReadUnlock(cont->lock);
 		printf("err %d\n", 16);
 		return RedisModule_ReplyWithLongLong(ctx, 0);
 	}
 	//start working magic
 	SPCompQueryPart *qp = RedisModule_Calloc(cont->compCtx->valueCount, sizeof(SPCompQueryPart));
-	// SPCompQueryComparator *qq = RedisModule_Calloc(cont->compCtx->valueCount, sizeof(SPCompQueryComparator));
 	int popRes = SpredisPopulateQueryParts(ctx, cont, qp, argv, argc);
 	if (popRes == REDISMODULE_OK) {
 		SpredisDoCompositeSearch(cont, res, hint, qp);
@@ -813,10 +805,10 @@ static int SpredisCompStoreRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleS
 		if (cqp.comps != NULL) RedisModule_Free(cqp.comps);
 	}
 	RedisModule_Free(qp);
-	// RedisModule_Free(qq);
-
 	//end working magic
-	SpredisUnProtectMap(cont);
+	SPReadUnlock(cont->lock);
+	SPReadUnlock(ns->lock);
+	
 	RedisModule_ReplyWithLongLong(ctx, kh_size(res));
     return REDISMODULE_OK;
 }

@@ -423,9 +423,9 @@ static const double __ac_HASH_UPPER = 0.77;
   @param  key   The integer [khint64_t]
   @return       The hash value [khint_t]
  */
-// #define kh_int64_hash_func(key) (khint32_t)((key)>>33^(key)^(key)<<11)
+#define kh_int64_hash_func(key) (khint32_t)((key)>>33^(key)^(key)<<11)
 
-#define kh_int64_hash_func(key) (khint32_t)(key)
+// #define kh_int64_hash_func(key) (khint32_t)(key)
 /*! @function
   @abstract     64-bit integer comparison function
  */

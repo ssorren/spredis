@@ -52,10 +52,14 @@ typedef struct bsem {
 
 
 /* Job */
+// typedef threadpool_job job;
+
 typedef struct job{
-	struct job*  prev;                   /* pointer to previous job   */
-	void   (*function)(void* arg);       /* function pointer          */
-	void*  arg;                          /* function's argument       */
+	struct job*  prev;                   
+	void   (*function)(void* arg);       
+	void*  arg;                          
+	pthread_mutex_t mutex;
+	pthread_cond_t   cond;
 } job;
 
 
@@ -187,12 +191,36 @@ int thpool_add_work(thpool_* thpool_p, void (*function_p)(void*), void* arg_p){
 	newjob->function=function_p;
 	newjob->arg=arg_p;
 
+	pthread_mutex_init(&newjob->mutex, NULL);
+	pthread_cond_init(&newjob->cond, NULL);
+
 	/* add job to queue */
 	jobqueue_push(&thpool_p->jobqueue, newjob);
 
 	return 0;
 }
 
+threadpool_job *thpool_get_job(thpool_* thpool_p, void (*function_p)(void*), void* arg_p){
+	job* newjob;
+
+	newjob=(struct job*)RedisModule_Alloc(sizeof(struct job));
+	if (newjob==NULL){
+		err("thpool_add_work(): Could not allocate memory for new job\n");
+		return NULL;
+	}
+
+	/* add function and argument */
+	newjob->function=function_p;
+	newjob->arg=arg_p;
+
+	pthread_mutex_init(&newjob->mutex, NULL);
+	pthread_cond_init(&newjob->cond, NULL);
+
+	/* add job to queue */
+	jobqueue_push(&thpool_p->jobqueue, newjob);
+
+	return (threadpool_job*)newjob;
+}
 
 /* Wait until all jobs have finished */
 void thpool_wait(thpool_* thpool_p){
@@ -362,9 +390,13 @@ static void* thread_do(struct thread* thread_p){
 			void*  arg_buff;
 			job* job_p = jobqueue_pull(&thpool_p->jobqueue);
 			if (job_p) {
+				pthread_cond_signal(&job_p->cond);
 				func_buff = job_p->function;
 				arg_buff  = job_p->arg;
 				func_buff(arg_buff);
+
+				pthread_mutex_destroy(&job_p->mutex);
+				pthread_cond_destroy(&job_p->cond);
 				RedisModule_Free(job_p);
 			}
 

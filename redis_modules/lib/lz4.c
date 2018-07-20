@@ -1310,6 +1310,15 @@ int LZ4_compress_forceExtDict (LZ4_stream_t* LZ4_dict, const char* source, char*
 }
 
 
+char *LZ4_dict(LZ4_stream_t* LZ4_dict) {
+  LZ4_stream_t_internal* const dict = &LZ4_dict->internal_donotuse;
+  return (char *)dict->dictionary;
+}
+
+int LZ4_dictSize(LZ4_stream_t* LZ4_dict) {
+  LZ4_stream_t_internal* const dict = &LZ4_dict->internal_donotuse;
+  return dict->dictSize;
+}
 /*! LZ4_saveDict() :
  *  If previously compressed data block is not guaranteed to remain available at its memory location,
  *  save it into a safer place (char* safeBuffer).

@@ -1,12 +1,5 @@
 #include "./spscoreset.h"
-
-// static inline SPScoreSetKey * SP_CREATE_SCORESET_KEY() {
-// 	SPScoreSetKey *key = RedisModule_Calloc(1, sizeof(SPScoreSetKey));
-// 	key->members = RedisModule_Calloc(1, sizeof(SPScoreSetMembers));
-// 	// key->members->set = kh_init(SIDS);
-//     key->members->set = NULL;
-// 	return key;
-// }
+#include <float.h>
 
 #define  SP_FREE_SCORESET_KEY(key)  \
     if ((key)->members->set) kh_destroy(SIDS, (key)->members->set);
@@ -26,14 +19,13 @@
     if (___key == NULL) { \
         SPScoreSetKey __create; \
         /*__create.value.asChar = (char *)RedisModule_Strdup((value).asChar);*/ \
-        __create.value.asChar = (char *)SPUniqStr((value).asChar);\
+        __create.value.asChar = SPUniqStr((value).asChar); \
         __create.members = RedisModule_Calloc(1, sizeof(SPScoreSetMembers)); \
         __create.members->set = kh_init(SIDS); \
-        ___key = &__create; \
-        ___key->members->score.asDouble = 0; /* score will be added later on apply sort */ \
+        __create.members->score.asDouble = DBL_MIN; /* score will be added later on apply sort */ \
         if (resort != NULL) *(resort) = 1; \
-        kb_putp(type, ss, ___key); \
-    } \
+        ___key = kb_putp(type, ss, &__create); \
+    } else if (resort != NULL) { *(resort) = 0; } \
     kh_put(SIDS, ___key->members->set, (id), &absent); \
     if (st != NULL) { \
         khint_t ___k = kh_put(SORTTRACK, (st), (id), &absent);\
@@ -46,25 +38,19 @@
     SPScoreSetKey *___key = kb_getp(type, ss, &___search); \
     int absent; \
     if (___key == NULL) { \
-        SPScoreSetKey __create; \
-        __create.value = (value); \
-        __create.members = RedisModule_Calloc(1, sizeof(SPScoreSetMembers)); \
-        __create.members->set = kh_init(SIDS); \
-        ___key = &__create; \
+        ___key = kb_putp(type, ss, &___search); \
+        ___key->members = RedisModule_Calloc(1, sizeof(SPScoreSetMembers)); \
+        ___key->members->set = kh_init(SIDS); \
         ___key->members->score = (value); \
-        kb_putp(type, ss, ___key); \
     } \
     kh_put(SIDS, ___key->members->set, (id), &absent); \
-    if (st != NULL) { \
-        khint_t ___k = kh_put(SORTTRACK, (st), (id), &absent);\
-        kh_value((st), ___k) = ___key->members; \
-    } \
 }
 
 
 
 #define SP_DOADD_SCORESET(type, ss, st, id, value) SP_DOADD_SCORESET_AUX(type, ss, st, id, value)
-#define SP_DOADD_LEXSET(type, ss, st, id, value, vresort) SP_DOADD_SCORESET_PTR(type, ss, st, id, value, (int *)vresort)
+// #define SP_DOADD_LEXSET(type, ss, st, id, value, vresort) SP_DOADD_SCORESET_PTR(type, ss, st, id, value, (int *)vresort)
+#define SP_DOADD_LEXSET(type, ss, st, id, value, vresort) SP_DOADD_SCORESET_AUX(type, ss, st, id, value)
 
 #define SP_DEL_SCORESET_KEY(key, search) \
         SPScoreSetMembers *___mems = (key)->members; \
@@ -108,44 +94,14 @@
     } \
 }
 
-// static inline void _SPAddAllToSetWithHint(khash_t(SIDS) *set, SPScoreSetKey *key, khash_t(SIDS) *hint) {
-//     spid_t id;
-//     int absent;
-//     // if (key->members->singleId && kh_contains(SIDS, hint, key->members->singleId))
-//     //     kh_put(SIDS, (set), (key)->members->singleId, &absent);
-//     khash_t(SIDS) *smaller, *larger;
-//     if (kh_size(hint) < kh_size(key->members->set)) {
-//         smaller = hint;
-//         larger = key->members->set;
-//     } else {
-//         smaller = key->members->set;
-//         larger = hint;
-//     }
-//     kh_foreach_key(smaller,id, {
-//         if (kh_contains(SIDS, larger, id)) kh_put(SIDS, set, id, &absent);
-//     });    
-// }
-
-// void SPAddAllToSet(khash_t(SIDS) *set, SPScoreSetKey *key, khash_t(SIDS) *hint) {
-//     if (hint != NULL) {
-//        _SPAddAllToSetWithHint(set, key, hint);
-//        return; 
-//     }
-// 	spid_t id;
-// 	int absent;
-//     kh_foreach_key(key->members->set,id, {
-//         kh_put(SIDS, set, id, &absent);
-//     });    
-// }
-
 void SPAddScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value)
 {
-	SP_DOADD_SCORESET(SCORESET, ss, st, id, value);
+    SP_DOADD_SCORESET(SCORESET, ss, st, id, value);
 }
 
 void SPAddLexScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value, int *resort)
 {
-	SP_DOADD_LEXSET(LEXSET, ss, st, id, value, resort);
+    SP_DOADD_LEXSET(LEXSET, ss, st, id, value, resort);
 }
 
 void SPAddGeoScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value)

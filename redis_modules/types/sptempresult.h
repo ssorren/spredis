@@ -19,7 +19,7 @@ typedef struct _SpredisTempResult {
 	size_t size;
 	// SpredisSortData **data;
 	// klist_t(TEMPRES) * data;
-	SpredisSortData **data;
+	SpredisSortData *data;
 } SpredisTempResult;
 void SpredisTMPResDBSave(RedisModuleIO *io, void *ptr);
 void SpredisTMPResRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value);

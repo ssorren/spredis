@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include <inttypes.h>
 #include <stdarg.h>
+#include <float.h>
 #include "lib/thpool.h"
 #define REDISMODULE_EXPERIMENTAL_API
 #include "lib/redismodule.h"
@@ -70,7 +71,9 @@ typedef khint64_t spid_t;
 #define SPEXPRTYPE 7
 #define SPDOCTYPE 8
 #define SPCOMPTYPE 9
-#define SPMAXTYPE 10
+#define SPNSTYPE 10
+#define SPRECORDTYPE 11
+#define SPMAXTYPE 12
 
 #define SET_REDIS_KEY_VALUE_TYPE(key, type, value) RedisModule_ModuleTypeSetValue(key, SPSTRINGTYPE ,dhash);
 
@@ -88,6 +91,7 @@ void SP_GET_KEYTYPES(RedisModuleKey *key, int *type, int *spType);
 
 int SpredisSetRedisKeyValueType(RedisModuleKey *key, int type, void *value);
 int SPDoWorkInThreadPool(void *func, void *arg);
+int SPDoWorkInThreadPoolAndWaitForStart(void *func, void *arg);
 void SPDoWorkInParallel(void (**func)(void*), void **arg, int jobCount);
 int SPThreadedWork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int (*command)(RedisModuleCtx*, RedisModuleString**, int));
 
@@ -97,6 +101,7 @@ void SpredisWarn(RedisModuleCtx *ctx, const char *fmt,...);
 const char *SPUniqStr(const char *str);
 
 #define SP_TWORK(f,a, code) {if (SPDoWorkInThreadPool(f,a)) code}
+#define SP_TWORK_WAIT(f,a, code) {if (SPDoWorkInThreadPoolAndWaitForStart(f,a)) code}
 // void SP_TWORK(void *func, void *arg) {
 //     if () {
 //         printf("%s\n", "THREAD LAUNCH ERROR!!!!!");
@@ -104,9 +109,9 @@ const char *SPUniqStr(const char *str);
 // }
 
 #define SP_GEN_TPOOL_SIZE 32
-#define SP_PQ_POOL_SIZE 16
+#define SP_PQ_POOL_SIZE 24
 #define SP_PQ_TCOUNT_SIZE 4
-#define SP_PTHRESHOLD 100
+#define SP_PTHRESHOLD 1024
 
 
 #define MAX_LAT             90.0
@@ -134,6 +139,12 @@ const char *SPUniqStr(const char *str);
 #include "commands/spfacetrange.h"
 #include "types/sptempresult.h"
 #include "types/spdocument.h"
+
+
+#include "types/spnamespace.h"
+#include "types/sprecordset.h"
+#include "commands/spcursor.h"
+
 
 #include "lib/spsortapplicator.h"
 

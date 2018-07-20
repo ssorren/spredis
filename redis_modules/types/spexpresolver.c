@@ -35,7 +35,7 @@ void _SpredisDestroyExpRslvr(void *value) {
     SpredisProtectWriteMap(er);//, "_SpredisDestroyExpRslvr");
     if (er->keyName) RedisModule_Free(er->keyName);
 	if (er->input) RedisModule_Free(er->input);
-	SpredisUnProtectMap(er);//, "_SpredisDestroyExpRslvr");
+	SPRWUnlock(er);//, "_SpredisDestroyExpRslvr");
 	pthread_rwlock_destroy(&er->mutex);
 	RedisModule_Free(er);
 }

@@ -1,3 +1,4 @@
+# DEBUG = 1
 DEBUGFLAGS = -g -ggdb -O3
 ifeq ($(DEBUG), 1)
 	DEBUGFLAGS = -g -ggdb -Og
@@ -34,8 +35,8 @@ MODULE_SO = spredis.so
 
 
 DEPS = 	$(TYPEDIR)/sptempresult.o $(TYPEDIR)/spset.o $(TYPEDIR)/spscore.o $(TYPEDIR)/splexscore.o $(TYPEDIR)/sphash.o $(TYPEDIR)/spscoreset.o\
-		$(TYPEDIR)/spexpresolver.o $(TYPEDIR)/spgeo.o $(TYPEDIR)/spcomposite.o $(TYPEDIR)/spdocument.o\
-		$(COMDIR)/spfacet.o $(COMDIR)/spfacetrange.o $(COMDIR)/spmcsort.o $(COMDIR)/sprangestore.o $(COMDIR)/spcomprangestore.o\
+		$(TYPEDIR)/spexpresolver.o $(TYPEDIR)/spgeo.o $(TYPEDIR)/spcomposite.o $(TYPEDIR)/spdocument.o $(TYPEDIR)/spnamespace.o $(TYPEDIR)/sprecordset.o\
+		$(COMDIR)/spfacet.o $(COMDIR)/spfacetrange.o $(COMDIR)/spmcsort.o $(COMDIR)/sprangestore.o $(COMDIR)/spcomprangestore.o $(COMDIR)/spcursor.o\
 		$(LIBDIR)/spsortapplicator.o $(LIBDIR)/thpool.o $(LIBDIR)/sp_parallelqueue.o $(LIBDIR)/kexpr.o $(LIBDIR)/geohash.o\
 		$(LIBDIR)/lz4.o 
 		# $(LIBDIR)/threadpool.o

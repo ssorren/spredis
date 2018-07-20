@@ -11,6 +11,7 @@
 #include "types/spsharedtypes.h"
 
 #include "lib/kexpr.h"
+#include "commands/spoptimize.h"
 
 
 
@@ -174,6 +175,16 @@ int SPDoWorkInThreadPool(void *func, void *arg) {
     return thpool_add_work(SP_GENERIC_WORKER_POOL, func, arg);
 }
 
+int SPDoWorkInThreadPoolAndWaitForStart(void *func, void *arg) {
+    threadpool_job *job = thpool_get_job(SP_GENERIC_WORKER_POOL, func, arg);
+    if (job == NULL) return -1;
+    pthread_cond_wait(&job->cond, &job->mutex);
+    // pthread_t tid;
+    // pthread_create(&tid,NULL,func,arg);
+    // return pthread_detach(tid);
+    return 0;
+}
+
 static SPJobQ *SP_PQ_POOL;
 
 void SPDoWorkInParallel(void (**func)(void*), void **arg, int jobCount) {
@@ -211,6 +222,7 @@ typedef struct {
     RedisModuleCtx *ctx;
     int argc;
     int reply;
+    int db;
     int (*command)(RedisModuleCtx*, RedisModuleString**, int);
 } SPThreadArg;
 
@@ -229,8 +241,7 @@ void SPThreadedReplyFree(void *arg)
     RedisModule_Free(targ);
 }
 
-KHASH_DECLARE_SET(STR, const char *);
-KHASH_SET_INIT_STR(STR);
+
 static khash_t(STR) *SP_UNIQUE_STR;
 
 const char *SPUniqStr(const char *str) {
@@ -249,8 +260,12 @@ const char *SPUniqStr(const char *str) {
 void SPThreadedDoWork(void *arg)
 {
     SPThreadArg *targ = arg;
-    
-    // SPUnlockContext(ctx);
+
+    //making sure we're on the same db as the calling thread,
+    //the blocked ctx does not inherit the db
+    SPLockContext(targ->ctx);
+    RedisModule_SelectDb(targ->ctx, targ->db);
+    SPUnlockContext(targ->ctx);
     targ->reply = targ->command(targ->ctx, targ->argv, targ->argc);
     RedisModule_UnblockClient(targ->bc, targ);
     
@@ -272,11 +287,6 @@ int SpredisStringToDouble(RedisModuleString *str, double *val) {
 
 int SPThreadedWork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int (*command)(RedisModuleCtx*, RedisModuleString**, int)) {
     RedisModule_AutoMemory(ctx);
-    
-    // for (int i = 0; i < argc; ++i)
-    // {
-        // printf("%s\n", RedisModule_StringPtrLen(argv[0], NULL));
-    // }
     SPThreadArg *targ = RedisModule_Alloc(sizeof(SPThreadArg));
     targ->bc = RedisModule_BlockClient(ctx, SPThreadedReply /*reply*/, SPThreadedReply /*timeout*/, SPThreadedReplyFree /*free*/ ,0);
     // targ->argv = argv;
@@ -284,7 +294,9 @@ int SPThreadedWork(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, int 
     targ->argc = argc;
     targ->command = command;
     targ->ctx = RedisModule_GetThreadSafeContext(targ->bc);
+    targ->db = RedisModule_GetSelectedDb(ctx);
     RedisModule_AutoMemory(targ->ctx);
+
     // we need to copy the args to the new context in case they get released before the thread is finished
     for (int i = 0; i < argc; ++i)
     {
@@ -326,12 +338,17 @@ pthread_t SPMainThread() {
 }
 int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     // SPLazyPool = thpool_init(1);
-
+    // RedisModule_AutoMemory(ctx);
     if (RedisModule_Init(ctx,"spredis",1,REDISMODULE_APIVER_1)
         == REDISMODULE_ERR) return REDISMODULE_ERR;
     SP_UNIQUE_STR = kh_init(STR);
     SPREDISMODULE_TYPES = RedisModule_Alloc(sizeof(RedisModuleType*) * 128);
-    SpredisSortAppInit();
+    // SpredisSortAppInit();
+    SpredisInitMaster();
+    SpredisInitRecordSet();
+    SpredisCursorInit();
+
+
     SpredisTempResultModuleInit();
     SpredisZsetMultiKeySortInit();
     SpredisFacetInit();
@@ -353,27 +370,54 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     // }
 
     if (SpredisInitDocumentCommands(ctx) != REDISMODULE_OK) return REDISMODULE_ERR;
-
-    if (RedisModule_CreateCommand(ctx,"spredis.test",
-        TEST_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    
+    if (RedisModule_CreateCommand(ctx,"spredis.definenamespace",
+        SpredisDefineNamespace_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx,"spredis.describenamespace",
+        SpredisDescribeNamespace_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+
+    if (RedisModule_CreateCommand(ctx,"spredis.addrecord",
+        SpredisAddRecord_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx,"spredis.deleterecord",
+        SpredisDeleteRecord_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx,"spredis.preparecursor",
+        SpredisPrepareCursor_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx,"spredis.deletecursor",
+        SpredisDeleteCursor_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    
+    
+    // if (RedisModule_CreateCommand(ctx,"spredis.optimize",
+    //     SpredisOptimizeIndex_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
     /* support commands */
     if (RedisModule_CreateCommand(ctx,"spredis.storerangebyscore",
-        SpredisStoreRangeByScore_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        SpredisStoreRangeByScore_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx,"spredis.storerangebylex",
-        SpredisStoreLexRange_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        SpredisStoreLexRange_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx,"spredis.storerangebyradius",
-        SpredisStoreRangeByRadius_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        SpredisStoreRangeByRadius_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     
     if (RedisModule_CreateCommand(ctx,"spredis.sort",
-        SpredisZsetMultiKeySort_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        SpredisZsetMultiKeySort_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
 
@@ -395,7 +439,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx,"spredis.setgeoresolver",
-        SpredisSetGeoResolver_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        SpredisSetGeoResolver_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
     
     if (RedisModule_CreateCommand(ctx,"spredis.resolveexpr",
@@ -405,144 +449,148 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     /* type commands */
     
-    if (RedisModule_CreateCommand(ctx,"spredis.hsetstr",
-        SpredisHashSetStr_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.hsetstr",
+    //     SpredisHashSetStr_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.hsetdbl",
-        SpredisHashSetDouble_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.hsetdbl",
+    //     SpredisHashSetDouble_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.hgetstr",
-        SpredisHashGetStr_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.hgetstr",
+    //     SpredisHashGetStr_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.hgetdbl",
-        SpredisHashGetDouble_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.hgetdbl",
+    //     SpredisHashGetDouble_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.hdel",
-        SpredisHashDel_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.hdel",
+    //     SpredisHashDel_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
     
-    if (RedisModule_CreateCommand(ctx,"spredis.zadd",
-        SpredisZSetAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.zadd",
+    //     SpredisZSetAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx,"spredis.zlinkset",
-        SpredisZScoreLinkSet_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        SpredisZScoreLinkSet_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.zrem",
-        SpredisZSetRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.zrem",
+    //     SpredisZSetRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx,"spredis.zcard",
         SpredisZSetCard_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
 
-    if (RedisModule_CreateCommand(ctx,"spredis.zladd",
-        SpredisZLexSetAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.zladd",
+    //     SpredisZLexSetAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
 
 
     if (RedisModule_CreateCommand(ctx,"spredis.zllinkset",
-        SpredisZLexLinkSet_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        SpredisZLexLinkSet_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
 
 
-    if (RedisModule_CreateCommand(ctx,"spredis.zlrem",
-        SpredisZLexSetRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.zlrem",
+    //     SpredisZLexSetRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.zlcard",
-        SpredisZLexSetCard_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.zlcard",
+    //     SpredisZLexSetCard_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.zlapplyscores",
-        SpredisZLexSetApplySortScores_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
-
-
-
-
-    if (RedisModule_CreateCommand(ctx,"spredis.geoadd",
-        SpredisZGeoSetAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
-
-    if (RedisModule_CreateCommand(ctx,"spredis.geoscore",
-        SpredisZGeoSetScore_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
-
-    if (RedisModule_CreateCommand(ctx,"spredis.georem",
-        SpredisZGeoSetRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
-
-    if (RedisModule_CreateCommand(ctx,"spredis.geocard",
-        SpredisZGeoSetCard_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.zlapplyscores",
+    //     SpredisZLexSetApplySortScores_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
 
 
-    if (RedisModule_CreateCommand(ctx,"spredis.sadd",
-        SpredisSetAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.smember",
-        SpredisSetMember_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.geoadd",
+    //     SpredisZGeoSetAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.srem",
-        SpredisSetRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.geoscore",
+    //     SpredisZGeoSetScore_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.scard",
-        SpredisSetCard_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+    // if (RedisModule_CreateCommand(ctx,"spredis.georem",
+    //     SpredisZGeoSetRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
+
+    // if (RedisModule_CreateCommand(ctx,"spredis.geocard",
+    //     SpredisZGeoSetCard_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
+
+
+
+    // if (RedisModule_CreateCommand(ctx,"spredis.sadd",
+    //     SpredisSetAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
+
+    // if (RedisModule_CreateCommand(ctx,"spredis.smember",
+    //     SpredisSetMember_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
+
+    // if (RedisModule_CreateCommand(ctx,"spredis.srem",
+    //     SpredisSetRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
+
+    // if (RedisModule_CreateCommand(ctx,"spredis.scard",
+    //     SpredisSetCard_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx,"spredis.deltempset",
+        SpredisDeleteTempSet_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx,"spredis.staddall",
-        SpredisSTempAddAll_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        SpredisSTempAddAll_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx,"spredis.stinterstore",
-        SpredisSTempInterstore_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        SpredisSTempInterstore_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx,"spredis.stdiffstore",
-        SpredisSTempDifference_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        SpredisSTempDifference_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx,"spredis.stunionstore",
-        SpredisSTempUnion_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        SpredisSTempUnion_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.documentadd",
-        SpredisDocAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.documentadd",
+    //     SpredisDocAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.documentrem",
-        SpredisDocRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.documentrem",
+    //     SpredisDocRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
     
 
-    if (RedisModule_CreateCommand(ctx,"spredis.compadd",
-        SpredisCompSetAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.compadd",
+    //     SpredisCompSetAdd_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.comprem",
-        SpredisCompSetRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.comprem",
+    //     SpredisCompSetRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.compcard",
-        SpredisCompSetCard_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.compcard",
+    //     SpredisCompSetCard_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx,"spredis.comprangestore",
-        SpredisCompStoreRange_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
+        SpredisCompStoreRange_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     
@@ -558,79 +606,80 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         SPREDISDHASH_ENCODING_VERSION, &rm);
 
 
-    RedisModuleTypeMethods stm = {
-        .version = REDISMODULE_TYPE_METHOD_VERSION,
-        .rdb_load = SpredisSetRDBLoad,
-        .rdb_save = SpredisSetRDBSave,
-        .aof_rewrite = SpredisSetRewriteFunc,
-        .free = SpredisSetFreeCallback
-    };
+    // RedisModuleTypeMethods stm = {
+    //     .version = REDISMODULE_TYPE_METHOD_VERSION,
+    //     .rdb_load = SpredisSetRDBLoad,
+    //     .rdb_save = SpredisSetRDBSave,
+    //     .aof_rewrite = SpredisSetRewriteFunc,
+    //     .free = SpredisSetFreeCallback
+    // };
 
-    SPREDISMODULE_TYPES[SPSETTYPE] = RedisModule_CreateDataType(ctx, "SPpSPeTSS",
-        SPREDISDHASH_ENCODING_VERSION, &stm);
+    // SPREDISMODULE_TYPES[SPSETTYPE] = RedisModule_CreateDataType(ctx, "SPpSPeTSS",
+    //     SPREDISDHASH_ENCODING_VERSION, &stm);
 
-    if (SPREDISMODULE_TYPES[SPSETTYPE] == NULL) return REDISMODULE_ERR;
-
-
-    RedisModuleTypeMethods ztm = {
-        .version = REDISMODULE_TYPE_METHOD_VERSION,
-        .rdb_load = SpredisZSetRDBLoad,
-        .rdb_save = SpredisZSetRDBSave,
-        .aof_rewrite = SpredisZSetRewriteFunc,
-        .free = SpredisZSetFreeCallback
-    };
-
-    SPREDISMODULE_TYPES[SPZSETTYPE] = RedisModule_CreateDataType(ctx, "SPpSZeTSS",
-        SPREDISDHASH_ENCODING_VERSION, &ztm);
+    // if (SPREDISMODULE_TYPES[SPSETTYPE] == NULL) return REDISMODULE_ERR;
 
 
-    if (SPREDISMODULE_TYPES[SPZSETTYPE] == NULL) return REDISMODULE_ERR;
+    // RedisModuleTypeMethods ztm = {
+    //     .version = REDISMODULE_TYPE_METHOD_VERSION,
+    //     .rdb_load = SpredisZSetRDBLoad,
+    //     .rdb_save = SpredisZSetRDBSave,
+    //     .aof_rewrite = SpredisZSetRewriteFunc,
+    //     .free = SpredisZSetFreeCallback
+    // };
 
-    RedisModuleTypeMethods zltm = {
-        .version = REDISMODULE_TYPE_METHOD_VERSION,
-        .rdb_load = SpredisZLexSetRDBLoad,
-        .rdb_save = SpredisZLexSetRDBSave,
-        .aof_rewrite = SpredisZLexSetRewriteFunc,
-        .free = SpredisZLexSetFreeCallback
-    };
-
-    SPREDISMODULE_TYPES[SPZLSETTYPE] = RedisModule_CreateDataType(ctx, "LsPpSZTSS",
-        SPREDISDHASH_ENCODING_VERSION, &zltm);
+    // SPREDISMODULE_TYPES[SPZSETTYPE] = RedisModule_CreateDataType(ctx, "SPpSZeTSS",
+    //     SPREDISDHASH_ENCODING_VERSION, &ztm);
 
 
-    if (SPREDISMODULE_TYPES[SPZLSETTYPE] == NULL) return REDISMODULE_ERR;
+    // if (SPREDISMODULE_TYPES[SPZSETTYPE] == NULL) return REDISMODULE_ERR;
+
+
+    // RedisModuleTypeMethods zltm = {
+    //     .version = REDISMODULE_TYPE_METHOD_VERSION,
+    //     .rdb_load = SpredisZLexSetRDBLoad,
+    //     .rdb_save = SpredisZLexSetRDBSave,
+    //     .aof_rewrite = SpredisZLexSetRewriteFunc,
+    //     .free = SpredisZLexSetFreeCallback
+    // };
+
+    // SPREDISMODULE_TYPES[SPZLSETTYPE] = RedisModule_CreateDataType(ctx, "LsPpSZTSS",
+    //     SPREDISDHASH_ENCODING_VERSION, &zltm);
+
+
+    // if (SPREDISMODULE_TYPES[SPZLSETTYPE] == NULL) return REDISMODULE_ERR;
 
 
 
-    RedisModuleTypeMethods htm = {
-        .version = REDISMODULE_TYPE_METHOD_VERSION,
-        .rdb_load = SpredisHashRDBLoad,
-        .rdb_save = SpredisHashRDBSave,
-        .aof_rewrite = SpredisHashRewriteFunc,
-        .free = SpredisHashFreeCallback
-    };
+    // RedisModuleTypeMethods htm = {
+    //     .version = REDISMODULE_TYPE_METHOD_VERSION,
+    //     .rdb_load = SpredisHashRDBLoad,
+    //     .rdb_save = SpredisHashRDBSave,
+    //     .aof_rewrite = SpredisHashRewriteFunc,
+    //     .free = SpredisHashFreeCallback
+    // };
 
-    SPREDISMODULE_TYPES[SPHASHTYPE] = RedisModule_CreateDataType(ctx, "HsPpShTSS",
-        SPREDISDHASH_ENCODING_VERSION, &htm);
+    // SPREDISMODULE_TYPES[SPHASHTYPE] = RedisModule_CreateDataType(ctx, "HsPpShTSS",
+    //     SPREDISDHASH_ENCODING_VERSION, &htm);
 
-    if (SPREDISMODULE_TYPES[SPHASHTYPE] == NULL) return REDISMODULE_ERR;
+    // if (SPREDISMODULE_TYPES[SPHASHTYPE] == NULL) return REDISMODULE_ERR;
 
     
 
 
-    RedisModuleTypeMethods gtm = {
-        .version = REDISMODULE_TYPE_METHOD_VERSION,
-        .rdb_load = SpredisZGeoSetRDBLoad,
-        .rdb_save = SpredisZGeoSetRDBSave,
-        .aof_rewrite = SpredisZGeoSetRewriteFunc,
-        .free = SpredisZGeoSetFreeCallback
-    };
+    // RedisModuleTypeMethods gtm = {
+    //     .version = REDISMODULE_TYPE_METHOD_VERSION,
+    //     .rdb_load = SpredisZGeoSetRDBLoad,
+    //     .rdb_save = SpredisZGeoSetRDBSave,
+    //     .aof_rewrite = SpredisZGeoSetRewriteFunc,
+    //     .free = SpredisZGeoSetFreeCallback
+    // };
 
-    SPREDISMODULE_TYPES[SPGEOTYPE] = RedisModule_CreateDataType(ctx, "GsPpSZTSS",
-        SPREDISDHASH_ENCODING_VERSION, &gtm);
+    // SPREDISMODULE_TYPES[SPGEOTYPE] = RedisModule_CreateDataType(ctx, "GsPpSZTSS",
+    //     SPREDISDHASH_ENCODING_VERSION, &gtm);
 
 
-    if (SPREDISMODULE_TYPES[SPGEOTYPE] == NULL) return REDISMODULE_ERR;
+    // if (SPREDISMODULE_TYPES[SPGEOTYPE] == NULL) return REDISMODULE_ERR;
 
     RedisModuleTypeMethods etm = {
         .version = REDISMODULE_TYPE_METHOD_VERSION,
@@ -647,42 +696,120 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     if (SPREDISMODULE_TYPES[SPEXPRTYPE] == NULL) return REDISMODULE_ERR;
 
 
-    RedisModuleTypeMethods dtm = {
+    // RedisModuleTypeMethods dtm = {
+    //     .version = REDISMODULE_TYPE_METHOD_VERSION,
+    //     .rdb_load = SpredisDocRDBLoad,
+    //     .rdb_save = SpredisDocRDBSave,
+    //     .aof_rewrite = SpredisDocRewriteFunc,
+    //     .free = SpredisDocFreeCallback
+    // };
+
+    // SPREDISMODULE_TYPES[SPDOCTYPE] = RedisModule_CreateDataType(ctx, "DoCvSZTSS",
+    //     SPREDISDHASH_ENCODING_VERSION, &dtm);
+
+
+    // if (SPREDISMODULE_TYPES[SPDOCTYPE] == NULL) return REDISMODULE_ERR;
+
+
+
+    // RedisModuleTypeMethods comptm = {
+    //     .version = REDISMODULE_TYPE_METHOD_VERSION,
+    //     .rdb_load = SpredisCompSetRDBLoad,
+    //     .rdb_save = SpredisCompSetRDBSave,
+    //     .aof_rewrite = SpredisCompSetRewriteFunc,
+    //     .free = SpredisCompSetFreeCallback
+    // };
+
+    // SPREDISMODULE_TYPES[SPCOMPTYPE] = RedisModule_CreateDataType(ctx, "SPpCOmTSS",
+    //     SPREDISDHASH_ENCODING_VERSION, &comptm);
+
+
+    // if (SPREDISMODULE_TYPES[SPCOMPTYPE] == NULL) return REDISMODULE_ERR;
+
+
+
+    RedisModuleTypeMethods nsptm = {
         .version = REDISMODULE_TYPE_METHOD_VERSION,
-        .rdb_load = SpredisDocRDBLoad,
-        .rdb_save = SpredisDocRDBSave,
-        .aof_rewrite = SpredisDocRewriteFunc,
-        .free = SpredisDocFreeCallback
+        .rdb_load = SpredisNSLoad,
+        .rdb_save = SpredisNSSave,
+        .aof_rewrite = SpredisNSRewriteFunc,
+        .free = SpredisNSFree
     };
 
-    SPREDISMODULE_TYPES[SPDOCTYPE] = RedisModule_CreateDataType(ctx, "DoCvSZTSS",
-        SPREDISDHASH_ENCODING_VERSION, &dtm);
+    SPREDISMODULE_TYPES[SPNSTYPE] = RedisModule_CreateDataType(ctx, "SPnStmTSX",
+        SPREDISDHASH_ENCODING_VERSION, &nsptm);
 
 
-    if (SPREDISMODULE_TYPES[SPDOCTYPE] == NULL) return REDISMODULE_ERR;
+    if (SPREDISMODULE_TYPES[SPNSTYPE] == NULL) return REDISMODULE_ERR;
 
 
+    /*
+    size_t testSize = 1000000;
+    long long start, end;
+    start = RedisModule_Milliseconds();
+    SPRecordId *a = RedisModule_Alloc(testSize * sizeof(SPRecordId));
+    end = RedisModule_Milliseconds();
+    printf("Alloc took %lldms\n", end - start);
+    start = RedisModule_Milliseconds();
+    SPRecordId rid;
+    RedisModuleString *tmp;
+    for (int i = 0; i < testSize; ++i)
+    {
+        tmp = RedisModule_CreateStringPrintf(ctx, "%lld", i);
+        rid = SPInitRecord(RedisModule_StringPtrLen(tmp, NULL), 10);
+        a[i] = rid;
+        RedisModule_FreeString(ctx, tmp);
+    }
 
-    RedisModuleTypeMethods comptm = {
-        .version = REDISMODULE_TYPE_METHOD_VERSION,
-        .rdb_load = SpredisCompSetRDBLoad,
-        .rdb_save = SpredisCompSetRDBSave,
-        .aof_rewrite = SpredisCompSetRewriteFunc,
-        .free = SpredisCompSetFreeCallback
-    };
+    end = RedisModule_Milliseconds();
+    printf("Create records took %lldms\n", end - start);
 
-    SPREDISMODULE_TYPES[SPCOMPTYPE] = RedisModule_CreateDataType(ctx, "SPpCOmTSS",
-        SPREDISDHASH_ENCODING_VERSION, &comptm);
-
-
-    if (SPREDISMODULE_TYPES[SPCOMPTYPE] == NULL) return REDISMODULE_ERR;
-
+    start = RedisModule_Milliseconds();
     
-    // if (SPDBLTYPE == NULL) return REDISMODULE_ERR;
-    // SPPtrOrD_t ta,tb;
-    // ta.asDouble = 2701.32;
-    // tb.asInt = ta.asInt;
-    // printf("conversion success = %d\n", !-1);
+    for (int i = 0; i < testSize; ++i)
+    {
+        rid = a[i];
+        rid.record->exists = 0;
+    }
+    end = RedisModule_Milliseconds();
+    printf("flag exists records took %lldms\n", end - start);
+
+    khash_t(MSTDOC) *docs = kh_init(MSTDOC);
+    khint_t k;
+    int absent;
+    start = RedisModule_Milliseconds();
+    
+    for (int i = 0; i < testSize; ++i)
+    {
+        rid = a[i];
+        k = kh_put(MSTDOC, docs, rid.record->sid, &absent);
+        kh_value(docs, k) = rid;
+    }
+
+    end = RedisModule_Milliseconds();
+    printf("add to set took %lldms\n", end - start);
+
+    const char *sid;
+    RedisModule_Free(a);
+    start = RedisModule_Milliseconds();
+
+    a = RedisModule_Alloc(kh_size(docs) * sizeof(SPRecordId));
+    size_t ctr = 0;
+    kh_foreach(docs, sid, rid, {
+        a[ctr++] = rid;
+    });
+    
+    end = RedisModule_Milliseconds();
+    printf("create result set took %lldms\n", end - start);
+    typedef struct _IndexStatus {
+        uint8_t exists:1,unindex:1;
+    } IndexStatus;
+    
+
+    RedisModule_Free(a);
+    
+    printf("Size of rid=%lu, record=%lu, IndexType=%lu\n", sizeof(SPRecordId), sizeof(SPRecord), sizeof(IndexStatus));
+    */
     return REDISMODULE_OK;
 }
 

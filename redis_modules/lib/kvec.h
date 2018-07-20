@@ -105,6 +105,16 @@ int main() {
 	} \
 } while(0)
 
+
+#define kv_foreach(v, vvar, code)  do { \
+	for (uint16_t __itr__ = 0; __itr__ < kv_max(v); ++__itr__) \
+	{ \
+		(vvar) = kv_A(v, __itr__); \
+		;code;  \
+	} \
+} while(0)
+
+
 #define kv_foreach_value(used, v, vvar, pos, code)  do { \
 	for (uint16_t __itr__ = 0; __itr__ < kv_max(used); ++__itr__) \
 	{ \

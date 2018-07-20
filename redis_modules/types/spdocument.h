@@ -4,9 +4,13 @@
 
 
 #include "../spredis.h"
+// #include "./spmaster.h"
+// typedef SPScoreSetMembers* SPRecordSortData;
+
 typedef struct _SPLZWCont {
 	size_t oSize;
 	char *packed;
+	// SPRecord *record;
 } SPLZWCont;
 
 KHASH_DECLARE(LZW, spid_t, SPLZWCont*);
