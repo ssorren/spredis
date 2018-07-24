@@ -513,7 +513,7 @@ int SpredisPrepareCursor_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
 		SPDestroyItemSortCtxContents(&sctx);
 	}
 
-	SPReadLock(ns->rs->lock);
+	// SPReadLock(ns->rs->lock);
 	SPReadLock(ns->rs->deleteLock);
 	if (pres == REDISMODULE_OK) {
 		RedisModule_ReplyWithArray(ctx, 2);
@@ -565,7 +565,7 @@ int SpredisPrepareCursor_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
 		}
 	}
     SPReadUnlock(ns->rs->deleteLock);
-    SPReadUnlock(ns->rs->lock);
+    // SPReadUnlock(ns->rs->lock);
     
     SPReadUnlock(ns->lock);
     // printf("I\n");
