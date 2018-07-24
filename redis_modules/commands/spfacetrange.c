@@ -14,8 +14,6 @@ typedef struct {
 #define SP_ISBETWEEN(val, min, max, minExcl, maxExcl)  ( (minExcl ? (val > min) : (val >= min)) && (maxExcl ? (val < max) : (val <= max))  )
 
 int SpredisFacetRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-
-
 	RedisModuleKey *key;
     SPNamespace *ns = NULL;
     SPLockContext(ctx);
@@ -35,7 +33,7 @@ int SpredisFacetRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **arg
 	}
 
 	SPReadLock(ns->lock);
-	SPReadLock(ns->rs->lock);
+	
 	// SPReadLock(ns->rs->deleteLock);
 
     int facetCount = (argc - 3) / 6;
@@ -49,8 +47,6 @@ int SpredisFacetRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **arg
     for (int i = 0; i < facetCount; ++i)
     {
     	facet = &facets[i];
-
-
     	fkey = argv[argIndex++];
     	facet->fieldIndex = SPFieldIndex(ns, RedisModule_StringPtrLen(fkey, NULL));
     	rangeRes1 = SpredisStringToDouble(argv[argIndex++], &(facet->min));
@@ -65,7 +61,7 @@ int SpredisFacetRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **arg
 	size_t dSize = cursor->count;
 	
 	SPFieldData *data;
-	
+	SPReadLock(ns->rs->deleteLock);
 	while(dSize) {
 		d = &items[--dSize];
 		if (!d->record->exists) continue;
@@ -87,7 +83,7 @@ int SpredisFacetRange_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **arg
 	}
 
 	// SPReadUnlock(ns->rs->deleteLock);
-	SPReadUnlock(ns->rs->lock);
+	SPReadUnlock(ns->rs->deleteLock);
 	SPReadUnlock(ns->lock);
 
 	RedisModule_ReplyWithArray(ctx, facetCount);

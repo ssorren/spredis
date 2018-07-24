@@ -15,6 +15,7 @@ typedef struct _SPItem {
 
 typedef struct _SPCursor {
     SPItem *items;
+    // SPPtrOrD_t *sortData;
     long long created;
     size_t count;
 } SPCursor;

@@ -971,7 +971,11 @@ void SPDoIndexingWork(SPIndexThreadArg *arg) {
 		if (rid.record->fields) {
 			SPFieldData *newFields = SPFieldDataHashToArray(arg->tfdata, ns);
 			SPFieldData *oldFields = rid.record->fields;
+			
+			SPWriteLock(rs->deleteLock);
 			rid.record->fields = newFields;
+			SPWriteUnlock(rs->deleteLock);
+
 			SPReIndexFields(ns, rid, rid.record->fields, newFields);
 			for (int i = 0; i < kv_size(ns->fields); ++i)
 			{
@@ -980,7 +984,10 @@ void SPDoIndexingWork(SPIndexThreadArg *arg) {
 			RedisModule_Free(oldFields);
 
 		} else {
+			// this is not likely to ever be called, but just in case my logic changes in the future
+			SPWriteLock(rs->deleteLock);
 			rid.record->fields = SPFieldDataHashToArray(arg->tfdata, ns);
+			SPWriteUnlock(rs->deleteLock);
 			SPDoIndexFields(ns, rid, rid.record->fields);	
 		}
 	} else {

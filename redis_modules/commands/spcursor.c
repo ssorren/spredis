@@ -117,7 +117,8 @@ int SpredisDeleteCursor_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **ar
 		SPWriteLock(CursorHash->lock);
 		k = kh_get(CURSORS, CursorHash->cursors, name);
 		if (k != kh_end(CursorHash->cursors)) {
-			RedisModule_Free(kh_value(CursorHash->cursors, k)->items);
+			if (kh_value(CursorHash->cursors, k)->items) RedisModule_Free(kh_value(CursorHash->cursors, k)->items);
+			// if (kh_value(CursorHash->cursors, k)->sortData) RedisModule_Free(kh_value(CursorHash->cursors, k)->sortData);
 			name = kh_key(CursorHash->cursors, k);
 			kh_del(CURSORS, CursorHash->cursors, k);
 			RedisModule_Free( (char *) name);
@@ -296,7 +297,9 @@ static void SPResolveSortValues(size_t count, SPItem *items, SPItemSortCtx *sctx
 		size_t start = 0;
         size_t incr = count / SP_PQ_TCOUNT_SIZE;
         SPItemResolveArg *arg;
-        SPItemResolveArg **pargs = RedisModule_Calloc(SP_PQ_TCOUNT_SIZE, sizeof(SPItemResolveArg*));
+
+        // SPItemResolveArg **pargs = RedisModule_Calloc(SP_PQ_TCOUNT_SIZE, sizeof(SPItemResolveArg*));
+        SPItemResolveArg *pargs[SP_PQ_TCOUNT_SIZE]; 
         void (*func[SP_PQ_TCOUNT_SIZE])(void*);
         for (int j = 0; j < SP_PQ_TCOUNT_SIZE; ++j)
         {
@@ -312,14 +315,13 @@ static void SPResolveSortValues(size_t count, SPItem *items, SPItemSortCtx *sctx
                 start += incr;
                 arg->end = start;
             }
-
         }
         SPDoWorkInParallel(func,(void **)pargs,SP_PQ_TCOUNT_SIZE);
         for (int j = 0; j < SP_PQ_TCOUNT_SIZE; ++j)
         {
         	RedisModule_Free(pargs[j]);
         }
-        RedisModule_Free(pargs);
+        // RedisModule_Free(pargs);
 	}
 }
 
@@ -444,9 +446,6 @@ int SpredisPrepareCursor_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
 					}
 					SPResolveSortValues(newEnd - newStart, cursor->items + newStart, &sctx, DOSPResolveMCResumeSortValues);
 					SpredisMCItemSort(newEnd - newStart, cursor->items + newStart, &sctx);
-
-
-
 				}
 				
 			} else {

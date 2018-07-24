@@ -12,7 +12,8 @@
 // 	UT_hash_handle hh;
 // };
 
-// KHASH_MAP_INIT_STR(SPREDISFACET, long long) ;
+KHASH_DECLARE(FACET, const char *, uint32_t)
+KHASH_MAP_INIT_STR(FACET, uint32_t) ;
 // typedef khash_t(HASH) khash_t(FHASH);
 // KHASH_MAP_INIT_INT64(FHASH, SPHashValue*);
 
@@ -22,6 +23,7 @@ typedef struct _SPFacetResult {
 	SPHashValueType valType;
 	long long count;
 	UT_hash_handle hh;
+	// khash_t(FACET) *hash;
 } SPFacetResult;
 
 
@@ -72,7 +74,7 @@ void __SPCloseAllFacets(SPFacetData* facets, int keyCount) {
 	    }
 	    if (facet->valMap != NULL) {
 	    	SPFacetResult *current, *tmp;
-
+	    	// kh_destroy(facet->valMap->hash);
 	    	HASH_ITER(hh, facet->valMap, current, tmp) {
 				HASH_DEL(facet->valMap,current);
 				RedisModule_Free(current);
@@ -82,39 +84,6 @@ void __SPCloseAllFacets(SPFacetData* facets, int keyCount) {
     }
     RedisModule_Free(facets);
 }
-
-// int SPThreadedFacet_reply_func(RedisModuleCtx *ctx, RedisModuleString **argv,
-//                int argc)
-// {
-// 	SPThreadedFacetArg *targ = RedisModule_GetBlockedClientPrivateData(ctx);
-// 	SpedisBuildFacetResult(ctx, targ->facets, targ->facetCount);
-//     return REDISMODULE_OK;
-// }
-
-// int SPThreadedFacet_timeout_func(RedisModuleCtx *ctx, RedisModuleString **argv,
-//                int argc)
-// {
-//     return RedisModule_ReplyWithNull(ctx);
-// }
-
-// void SPThreadedFacet_FreePriv(void *prv)
-// {	
-// 	SPThreadedFacetArg *targ = prv;
-// 	__SPCloseAllFacets(targ->facets, targ->facetCount);
-// 	RedisModule_Free(targ);
-// }
-
-// typedef struct {
-// 	SPFacetData **facets;
-// 	SpredisSortData *d;
-// 	SPFacetResult **valMaps;
-// 	uint8_t facetCount;
-// 	size_t start, end;
-// } SPPopFacetArg;
-
-
-
-
 
 
 int SPFacetResultCompareLT(SPFacetResult *a, SPFacetResult *b, SPFacetData *facet) {
@@ -200,10 +169,26 @@ int SpedisBuildFacetResult(RedisModuleCtx *ctx, SPFacetData *facets, int facetCo
 	return REDISMODULE_OK;
 }
 
+// opportunity for parallel processing here, but need to figure out how to do a merge of the results first
+typedef struct _SPThreadedFacetArg {
+	SPFacetData *facets;
+	int facetCount;
+	SPCursor *cursor;
+	size_t start;
+	size_t end;
+} SPThreadedFacetArg;
 
-void SPThreadedFacet(SPFacetData *facets, int facetCount, SPCursor *cursor) {
+void SPThreadedFacet(void *varg) {
+
+	SPThreadedFacetArg *arg = varg;
+	SPFacetData *facets = arg->facets;
+	int facetCount = arg->facetCount;
+	SPCursor *cursor = arg->cursor;
 	SPItem *items = cursor->items, *item;
-	size_t dSize = cursor->count;
+	size_t dSize = arg->end;
+	size_t start = arg->start;
+
+	// printf("Start: %zu, End:%zu\n", start, dSize);
 	SPFacetData *facet;
 	int keyI;
 	SPFacetResult *fm = NULL;
@@ -211,7 +196,7 @@ void SPThreadedFacet(SPFacetData *facets, int facetCount, SPCursor *cursor) {
 	// char *sav;
 	SPFieldData *data;
 
-	while(dSize)
+	while(dSize > start)
 	{
 		keyI = facetCount;
 		item = &items[--dSize];
@@ -237,7 +222,6 @@ void SPThreadedFacet(SPFacetData *facets, int facetCount, SPCursor *cursor) {
 				    		HASH_ADD_KEYPTR( hh, facet->valMap, fm->val.asChar, strlen(fm->val.asChar), fm );
 				    	}
 					}
-
 				} else if (facet->type == SPDoublePart) {
 					if (data->iv == NULL || data->ilen == 0) continue;
 					for (int i = 0; i < data->ilen; ++i)
@@ -255,15 +239,53 @@ void SPThreadedFacet(SPFacetData *facets, int facetCount, SPCursor *cursor) {
 				    		HASH_ADD(hh, facet->valMap, val, sizeof(SPPtrOrD_t), fm);
 				    	}
 					}
-
 				} else {
 					continue;
 				}
 			}
 		}
 	}
-	
-	
+}
+
+void SPMergeFacets(SPFacetData *dst, SPFacetData *src, int facetCount) {
+	SPFacetResult *targ, *current, *tmp, *fm = NULL;
+
+	for (int i = 0; i < facetCount; ++i)
+	{
+		targ = dst[i].valMap;
+
+		HASH_ITER(hh, src[i].valMap, current, tmp) {
+			fm = NULL;
+			if (dst[i].type == SPLexPart) {
+				HASH_FIND_STR(targ, current->val.asChar, fm);
+		    	if (fm) {
+		    		fm->count += current->count;
+		    	} else {
+		    		fm = (SPFacetResult*)RedisModule_Calloc(1, sizeof(SPFacetResult));
+		    		fm->valType = SPHashStringType;
+		    		fm->val = current->val;
+		    		fm->count = current->count;
+		    		HASH_ADD_KEYPTR( hh, targ, fm->val.asChar, strlen(fm->val.asChar), fm );
+		    	}
+			} else if (dst[i].type == SPDoublePart) {
+
+				// HASH_FIND_STR(targ, current->val.asChar, fm);
+				HASH_FIND(hh, targ, &current->val, sizeof(SPPtrOrD_t), fm);
+		    	if (fm) {
+		    		fm->count += current->count;
+		    	} else {
+		    		fm = (SPFacetResult*)RedisModule_Calloc(1, sizeof(SPFacetResult));
+		    		fm->valType = SPHashStringType;
+		    		fm->val = current->val;
+		    		fm->count = current->count;
+		    		HASH_ADD(hh, targ, val, sizeof(SPPtrOrD_t), fm);
+		    		// HASH_ADD_KEYPTR( hh, targ, fm->val.asChar, strlen(fm->val.asChar), fm );
+		    	}
+			} 
+			// HASH_DEL(facet->valMap,current);
+			// RedisModule_Free(current);
+		};
+	}
 }
 
 int SpredisFacets_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
@@ -287,17 +309,12 @@ int SpredisFacets_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, i
 	}
 
 	SPReadLock(ns->lock);
-	SPReadLock(ns->rs->lock);
-	// SPReadLock(ns->rs->deleteLock);
-
-
 
     int argOffset = 3;
     if ( ((argc - argOffset) % 3) != 0 ) return RedisModule_WrongArity(ctx);
     int facetCount = (argc - argOffset) / 3;
     
     
-    // int ok = REDISMODULE_OK;
 
     SPFacetData *facets = RedisModule_Calloc(facetCount, sizeof(SPFacetData));
     SPFacetData *facet;
@@ -305,7 +322,6 @@ int SpredisFacets_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, i
 	SPFieldDef *fd;
 
 	/** populate **/
-	// printf("0\n");
     for (int i = 0; i < facetCount; ++i)
     {
 	    facet = &facets[i];
@@ -315,21 +331,75 @@ int SpredisFacets_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, i
 	    facet->order = SPREDIS_ORDER(RedisModule_StringPtrLen(argv[argI++], NULL));
 	    facet->type = fd->fieldType;
     }
-    // printf("A\n");
-    //get the facet counts
-    SPThreadedFacet(facets, facetCount, cursor);
-    // printf("B\n");
-    // SPReadUnlock(ns->rs->deleteLock);
-    SPReadUnlock(ns->rs->lock);
+
+    SPReadLock(ns->rs->deleteLock);
+
+    if (cursor->count <= 1024) {
+	    SPThreadedFacetArg arg = {	.facets =facets,
+									.facetCount = facetCount,
+									.cursor = cursor,
+									.start = 0,
+									.end = cursor->count};
+
+	    SPThreadedFacet(&arg);
+    } else { //parallel mode
+    	size_t start = 0;
+        size_t incr = cursor->count / SP_PQ_TCOUNT_SIZE;
+    	SPThreadedFacetArg *pargs[SP_PQ_TCOUNT_SIZE];
+    	void (*func[SP_PQ_TCOUNT_SIZE])(void*);
+    	for (int i = 0; i < SP_PQ_TCOUNT_SIZE; ++i)
+    	{
+    		func[i] = SPThreadedFacet;
+    		SPThreadedFacetArg *arg = RedisModule_Calloc(1, sizeof(SPThreadedFacetArg));
+    		pargs[i] = arg;
+
+    		arg->start = start;
+            arg->cursor = cursor;
+            arg->facetCount = facetCount;
+            if (i == 0) {
+            	//this is our base, all other results will be merged to these facets
+            	arg->facets = facets;
+            } else {
+            	//need to duplicate facets
+            	SPFacetData *tfacets = RedisModule_Calloc(facetCount, sizeof(SPFacetData));
+            	arg->facets = tfacets;
+            	for (int k = 0; k < facetCount; ++k)
+            	{
+            		facet = &tfacets[k];
+				    facet->fieldIndex = facets[k].fieldIndex;
+				    facet->replyCount = facets[k].replyCount;
+				    facet->order = facets[k].order;
+				    facet->type =  facets[k].type;
+            	}
+            }
+
+    		if (i == (SP_PQ_TCOUNT_SIZE - 1)) {
+                arg->end = cursor->count;
+            } else {
+                start += incr;
+                arg->end = start;
+            }
+    	}
+
+    	SPDoWorkInParallel(func,(void **)pargs,SP_PQ_TCOUNT_SIZE);
+
+    	//merge the facets, pargs[0] contains the destination, so start from 1
+    	for (int i = 1; i < SP_PQ_TCOUNT_SIZE; ++i) {
+    		SPMergeFacets(facets, pargs[i]->facets, facetCount);
+    		__SPCloseAllFacets(pargs[i]->facets, facetCount);
+    	}
+
+    	for (int i = 0; i < SP_PQ_TCOUNT_SIZE; ++i) {
+    		RedisModule_Free(pargs[i]);
+    	}
+    }
+    SPReadUnlock(ns->rs->deleteLock);
     SPReadUnlock(ns->lock);
-    // printf("C\n");
+    
 	SpedisPrepareFacetResult(facets, facetCount);
-	// printf("D\n");
 	SpedisBuildFacetResult(ctx, facets, facetCount);
-	// printf("E\n");
 	__SPCloseAllFacets(facets, facetCount);
-	// printf("F\n");
-    // printf("Hydrating facets took %lldms\n", RedisModule_Milliseconds() - startTimer);
+	
 	return REDISMODULE_OK;
 }
 
