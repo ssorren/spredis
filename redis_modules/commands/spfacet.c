@@ -137,7 +137,7 @@ int SpedisPrepareFacetResult(SPFacetData *facets, int facetCount) {
 		}
 	    max = (max > facet->count) ? facet->count : max;
 	    facet->replyCount = max;
-	    SpredisSPFacetResultSort(facet->count, facet->results, facet);
+	    SpredisSPFacetResultSort(counted, facet->results, facet);
 	    // SpredisSPFacetResultByNameSort(facet->count, facet->results, facet);
 	}
 	return REDISMODULE_OK;
@@ -275,7 +275,7 @@ void SPMergeFacets(SPFacetData *dst, SPFacetData *src, int facetCount) {
 		    		fm->count += current->count;
 		    	} else {
 		    		fm = (SPFacetResult*)RedisModule_Calloc(1, sizeof(SPFacetResult));
-		    		fm->valType = SPHashStringType;
+		    		fm->valType = SPHashDoubleType;
 		    		fm->val = current->val;
 		    		fm->count = current->count;
 		    		HASH_ADD(hh, targ, val, sizeof(SPPtrOrD_t), fm);
@@ -334,7 +334,7 @@ int SpredisFacets_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, i
 
     SPReadLock(ns->rs->deleteLock);
 
-    if (cursor->count <= 1024) {
+    if (cursor->count < 1024) {
 	    SPThreadedFacetArg arg = {	.facets =facets,
 									.facetCount = facetCount,
 									.cursor = cursor,
@@ -342,6 +342,11 @@ int SpredisFacets_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, i
 									.end = cursor->count};
 
 	    SPThreadedFacet(&arg);
+
+	    SpedisPrepareFacetResult(facets, facetCount);
+		SpedisBuildFacetResult(ctx, facets, facetCount);
+		__SPCloseAllFacets(facets, facetCount);
+
     } else { //parallel mode
     	size_t start = 0;
         size_t incr = cursor->count / SP_PQ_TCOUNT_SIZE;
@@ -370,6 +375,7 @@ int SpredisFacets_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, i
 				    facet->replyCount = facets[k].replyCount;
 				    facet->order = facets[k].order;
 				    facet->type =  facets[k].type;
+				    facet->valMap = NULL;
             	}
             }
 
@@ -386,6 +392,12 @@ int SpredisFacets_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, i
     	//merge the facets, pargs[0] contains the destination, so start from 1
     	for (int i = 1; i < SP_PQ_TCOUNT_SIZE; ++i) {
     		SPMergeFacets(facets, pargs[i]->facets, facetCount);
+    	}
+
+    	SpedisPrepareFacetResult(facets, facetCount);
+		SpedisBuildFacetResult(ctx, facets, facetCount);
+	
+    	for (int i = 0; i < SP_PQ_TCOUNT_SIZE; ++i) {
     		__SPCloseAllFacets(pargs[i]->facets, facetCount);
     	}
 
@@ -396,9 +408,7 @@ int SpredisFacets_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, i
     SPReadUnlock(ns->rs->deleteLock);
     SPReadUnlock(ns->lock);
     
-	SpedisPrepareFacetResult(facets, facetCount);
-	SpedisBuildFacetResult(ctx, facets, facetCount);
-	__SPCloseAllFacets(facets, facetCount);
+	
 	
 	return REDISMODULE_OK;
 }
