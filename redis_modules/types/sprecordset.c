@@ -391,6 +391,7 @@ SPRecordSet *SPCreateRecordSet(SPNamespace *ns) {
 	SPLockInit(rs->lzwLock);
 	kv_init(rs->packStack);
 	rs->delrun = 1;
+
 	pthread_create(&rs->deleteThread, NULL, SPDeleteThread, rs);
 	pthread_detach(rs->deleteThread);
 	// rs->unpackBuff = RedisModule_Alloc( SP_UNPACK_BUFF_SZ * sizeof(char) );
@@ -500,11 +501,14 @@ int SPDeleteRecord(RedisModuleCtx *ctx, SPNamespace *ns, const char *id) {
 		if (rec->exists) {
 			res = 1;
 			SPUpgradeLock(rs->lock);
+
+			SPWriteLock(rs->deleteLock);
+			
 			SPWriteLock(rs->lzwLock);
 			SPReleasePackCont(ctx, rs, rid);
 			SPWriteUnlock(rs->lzwLock);
 
-			SPWriteLock(rs->deleteLock);
+			
 
 			if (rid.record->rawDoc.unpacked) {
 				// printf("Freeing doc\n");
@@ -971,7 +975,13 @@ void SPDoIndexingWork(SPIndexThreadArg *arg) {
 		if (rid.record->fields) {
 			SPFieldData *newFields = SPFieldDataHashToArray(arg->tfdata, ns);
 			SPFieldData *oldFields = rid.record->fields;
-			
+			/*
+				this delete lock is for preventing the changing of data
+				while facets or sorting are taking place
+				-	we could make yet another update lock
+					but since those processes are already locking on delete
+					just use the delete lock to keep things as simple as possible
+			*/
 			SPWriteLock(rs->deleteLock);
 			rid.record->fields = newFields;
 			SPWriteUnlock(rs->deleteLock);

@@ -144,33 +144,42 @@ void SPDestroyItemSortCtxContents(SPItemSortCtx *sctx) {
 }
 
 void SPGeoSortResolver(SPItem *item, SPItemFieldSort *fs) {
-	SPFieldData *vals = &item->record->fields[ fs->fieldOrder ];
-	SPPtrOrD_t distance = NULL_NUM;
-	double lat, lon;
-	if (vals->ilen && vals->iv) {
-		SPGeoHashDecode(vals->iv[0].asUInt, &lat, &lon);
-		distance.asDouble = SPGetDist(fs->lat, fs->lon, lat, lon);
+	if (item->record->exists) {
+		SPFieldData *vals = &item->record->fields[ fs->fieldOrder ];
+		SPPtrOrD_t distance = NULL_NUM;
+		double lat, lon;
+		if (vals->ilen && vals->iv) {
+			SPGeoHashDecode(vals->iv[0].asUInt, &lat, &lon);
+			distance.asDouble = SPGetDist(fs->lat, fs->lon, lat, lon);
+		}
+		item->sortData[ fs->resIndex ] = distance;
+	} else {
+		item->sortData[ fs->resIndex ] = NULL_GEO;
 	}
-	item->sortData[ fs->resIndex ] = distance;
 }
 
 void SPValueSortResolver(SPItem *item, SPItemFieldSort *fs) {
 	SPPtrOrD_t val = NULL_NUM;
-	SPFieldData *vals = &item->record->fields[fs->fieldOrder];
-	if (vals->ilen && vals->iv) {
-		val = vals->iv[0];
+	if (item->record->exists) {
+		SPFieldData *vals = &item->record->fields[fs->fieldOrder];
+		if (vals->ilen && vals->iv) {
+			val = vals->iv[0];
+		}
 	}
 	item->sortData[ fs->resIndex ] = val;
 }
 
 void SPLexSortResolver(SPItem *item, SPItemFieldSort *fs) {
 	SPPtrOrD_t val = NULL_STR;
-	SPFieldData *vals = &item->record->fields[fs->fieldOrder];
-	if (vals->alen && vals->av) {
-		val = vals->av[0];
-	} else if (vals->ilen && vals->iv) {
-		val = vals->iv[0];
+	if (item->record->exists) {
+		SPFieldData *vals = &item->record->fields[fs->fieldOrder];
+		if (vals->alen && vals->av) {
+			val = vals->av[0];
+		} else if (vals->ilen && vals->iv) {
+			val = vals->iv[0];
+		}	
 	}
+	
 	item->sortData[ fs->resIndex ] = val;
 }
 
@@ -372,16 +381,20 @@ int SpredisPrepareCursor_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     const char *cursorName = RedisModule_StringPtrLen(argv[2], NULL);
 
     SPReadLock(ns->lock);
-    SPReadLock(ns->rs->lock);
+    // SPReadLock(ns->rs->lock);
     // SPReadLock(ns->rs->deleteLock);
     // printf("F\n");
     
     // printf("Preparing sort data\n");
-    long long tstart = RedisModule_Milliseconds();
+    // long long tstart = RedisModule_Milliseconds();
     SPPtrOrD_t *sd = sortCount ? RedisModule_Alloc(kh_size(result) * sortCount * sizeof(SPSortData)) : NULL;
     size_t len;
+    SPReadLock(ns->rs->lock);
+    SPReadLock(ns->rs->deleteLock);
     SPItem *items = SPSetToItems( result, &len, sd , sortCount);
-    printf("Alloc and s2a took %llu\n", RedisModule_Milliseconds() - tstart);
+    SPReadUnlock(ns->rs->deleteLock);
+    SPReadUnlock(ns->rs->lock);
+    // printf("Alloc and s2a took %llu\n", RedisModule_Milliseconds() - tstart);
     // printf("Done with result %s, %zu\n", RedisModule_StringPtrLen(argv[3], NULL), kh_size(result));
     cursor->items = items;
     cursor->count = len;
@@ -417,48 +430,91 @@ int SpredisPrepareCursor_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
 			size_t newStart = start;
 			size_t newEnd = end + start;
 			if (newEnd > cursor->count) newEnd = cursor->count;
-			tstart = RedisModule_Milliseconds();
+			// tstart = RedisModule_Milliseconds();
 
 			if (sortCount > 1) {
 				SPItem a, b;
 				SPItemComp comp = sctx.comps[0];
 				if (cursor->count < 128 || newEnd >= cursor->count) { //small list have little effect, let's keep it simple
+					
+					SPReadLock(ns->rs->deleteLock);
 					SPResolveSortValues(cursor->count, cursor->items, &sctx, DOSPResolveMCSortValues);	
+					SPReadUnlock(ns->rs->deleteLock);
+
 					SpredisMCItemSort(cursor->count, cursor->items, &sctx);	
 				} else {
-					//we're going to sort the entire list bu the first column and then get our bearings
+					/*
+						at minimum, we need to sort evrything by the first column,
+						but we only need to sort by the rest of the columns for the items that the 
+						client has asked for.
+
+						we're going to sort the entire list but the first column and then get our bearings
+
+						if we decide to do persistent cursors down the road, we'll have to save the state 
+						of the sort, as well as the sort data itself, 
+						then do incremental sort for each page requested
+							in this scenario we're doing a bit more work than if we just sorted everything from
+							the get go, but we'll spread the cpu cycles out over time
+							most searches never get past the first page or 2 anyway
+					*/
+					SPReadLock(ns->rs->deleteLock);
 					SPResolveSortValues(cursor->count, cursor->items, &sctx, DOSPResolveSCSortValues);
+					SPReadUnlock(ns->rs->deleteLock);
+
 					SpredisSCItemSort(cursor->count, cursor->items, &sctx);
 
-					// we need to find the beginning of the series of the first value in the result
+					/*
+						we need to find the beginning of the series of the first value in the result
+						as values may move up/down in the list based off the secondary sort columns
+					*/
 					while (newStart) {
 						a = cursor->items[newStart];
 						b = cursor->items[newStart - 1];
 						if (!comp(*a.sortData, *b.sortData)) break;
 						newStart--;
 					}
-					// we need to find the end of the series of the last value in the result
+					/*
+						we need to find the end of the series of the last value in the result
+						as values may move up/down in the list based off the secondary sort columns
+				 	*/
 					while (newEnd < cursor->count - 1) {
 						a = cursor->items[newEnd];
 						b = cursor->items[newEnd + 1];
 						if (!comp(*a.sortData, *b.sortData)) break;
 						newEnd++;
 					}
+					// make sure we grab the rest of the values we need to sort off of
+					SPReadLock(ns->rs->deleteLock);
 					SPResolveSortValues(newEnd - newStart, cursor->items + newStart, &sctx, DOSPResolveMCResumeSortValues);
+					SPReadUnlock(ns->rs->deleteLock);
+					/*
+						now resort the section, we need to keep the first column 
+						as the section likely contains multiple series
+							if we only sort off the extra columns, we'll lose our initial order
+						note* 	it might be better to do a merge sort here 
+								as the values are partially sorted already,
+								but this is already complicated enough
+								there are also memory concerns with a merge sort
+					*/
 					SpredisMCItemSort(newEnd - newStart, cursor->items + newStart, &sctx);
 				}
 				
 			} else {
+				SPReadLock(ns->rs->deleteLock);
 				SPResolveSortValues(cursor->count, cursor->items, &sctx, DOSPResolveSCSortValues);	
+				SPReadUnlock(ns->rs->deleteLock);
+
 				SpredisSCItemSort(cursor->count, cursor->items, &sctx);
 			}
 			
 
-			printf("Sort took %llu\n", RedisModule_Milliseconds() - tstart);
+			// printf("Sort took %llu\n", RedisModule_Milliseconds() - tstart);
 		}
 		SPDestroyItemSortCtxContents(&sctx);
 	}
 
+	SPReadLock(ns->rs->lock);
+	SPReadLock(ns->rs->deleteLock);
 	if (pres == REDISMODULE_OK) {
 		RedisModule_ReplyWithArray(ctx, 2);
 		RedisModule_ReplyWithLongLong(ctx, cursor->count);
@@ -486,7 +542,6 @@ int SpredisPrepareCursor_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
 					replyLen++;
 				}
 			} else {
-				// khash_t(SIDS) *packs = kh_init(SIDS);
 				while (start < end && start < cursor->count) {
 					item = &cursor->items[start++];
 					record = item->record;
@@ -503,19 +558,15 @@ int SpredisPrepareCursor_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
 					replyLen++;
 				}
 
-				// kh_foreach_key(packs, pid, {
-				// 	SP_PACK_CONTAINER(ctx, ns->rs, pid.pc, 1);
-				// });
-				// kh_destroy(SIDS, packs);
-
 			}
 			RedisModule_ReplySetArrayLength(ctx, replyLen);
 		} else {
 			RedisModule_ReplyWithNull(ctx);
 		}
 	}
-    // SPReadUnlock(ns->rs->deleteLock);
+    SPReadUnlock(ns->rs->deleteLock);
     SPReadUnlock(ns->rs->lock);
+    
     SPReadUnlock(ns->lock);
     // printf("I\n");
     if (sd) {
