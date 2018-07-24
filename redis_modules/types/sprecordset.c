@@ -503,7 +503,7 @@ int SPDeleteRecord(RedisModuleCtx *ctx, SPNamespace *ns, const char *id) {
 			SPUpgradeLock(rs->lock);
 
 			SPWriteLock(rs->deleteLock);
-			
+
 			SPWriteLock(rs->lzwLock);
 			SPReleasePackCont(ctx, rs, rid);
 			SPWriteUnlock(rs->lzwLock);
@@ -519,7 +519,6 @@ int SPDeleteRecord(RedisModuleCtx *ctx, SPNamespace *ns, const char *id) {
 			rid.record->pc = NULL;
 			rec->exists = 0;
 			kh_del(MSTDOC, rs->docs, k);
-			SPWriteUnlockRP(rs->lock);
 
 			SPDoUnIndexFields(ns, rid, rid.record->fields);
 			RedisModule_Free(rid.record->fields);
@@ -1010,7 +1009,11 @@ void SPDoIndexingWork(SPIndexThreadArg *arg) {
 	}
 
 	// rid.record->kson = kson_parse(doc, ns);
+	// SPWriteLock(rs->deleteLock);
+
 	SP_PACK_DOC(rs, doc, arg->doclen, rid, 1);
+
+	// SPWriteUnlock(rs->deleteLock);
 
 	SPWriteUnlock(rs->lock);
 	SPReadUnlock(ns->lock);
