@@ -160,6 +160,8 @@ typedef struct _SPRecord {
     SPRawDoc rawDoc;
     char *sid;
     SPPackCont *pc;
+
+    // kson_t *kson;
 } SPRecord;
 
 
@@ -300,10 +302,12 @@ typedef kvec_t(const char *) SPStrVec;
 typedef kvec_t(SPPackCont *) SPPackContVec;
 
 
-typedef struct _SPDeletedRecordId {
+typedef struct _SPDeletedRecord {
     SPRecordId rid;
     long long date;
-} SPDeletedRecordId;
+} SPDeletedRecord;
+
+typedef kvec_t(SPDeletedRecord) SPDeletedRecordVec;
 
 typedef struct _SPRecordSet {
     SPLock lock;
@@ -316,13 +320,15 @@ typedef struct _SPRecordSet {
     uint8_t *swapTypes;
     khash_t(MSTDOC) *docs;
     // khash_t(SIDS) *deleted;
-    kvec_t(SPRecordId) deleted;
+    SPDeletedRecordVec deleted;
     // LZ4_streamDecode_t* decompressStream;
     // LZ4_stream_t* compressStream;
     // char *unpackBuff;
     // char *lzwDict;
     // int lzwDictSize;
     // char *swap;
+    pthread_t deleteThread;
+    int delrun;
     SPPackContVec packStack;
 } SPRecordSet;
 
@@ -333,6 +339,7 @@ struct _SPNamespace {
     // const char *name, *recordSetName;
     SPLock lock;
     SPLock indexLock;
+    SPLock strLock;
     char **rewrite;
     int rewriteLen;
     const char *name, *defaultLang;

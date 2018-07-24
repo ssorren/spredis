@@ -415,6 +415,10 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         SpredisStoreRangeByRadius_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
+    if (RedisModule_CreateCommand(ctx,"spredis.storerecordsbyid",
+        SpredisStoreRecords_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
     
     if (RedisModule_CreateCommand(ctx,"spredis.sort",
         SpredisZsetMultiKeySort_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)

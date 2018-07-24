@@ -2,10 +2,16 @@
 
 #include <float.h>
 #include "../lib/lz4.h"
+// #include "../lib/utstring.h"
 #define SP_ACCELERATION_FACTOR 2
 #define SP_MAX_DICT_SIZE 2048
 #define SP_PC_LEN 10
 #define SP_UNPACK_BUFF_SZ (1 <<20)
+
+#ifndef SP_RS_DEL_INTERVAL
+#define SP_RS_DEL_INTERVAL 10
+#endif
+
 // (64 * (1 <<10))
 
 //(64 * (1 <<10))
@@ -160,7 +166,7 @@ static inline char *SP_UNPACK_RID(SPRecordSet *rs, SPPackCont *pc, SPRecordId ri
 	RedisModule_Free(unpacked);
 	return res;
 }
-void SP_PACK_CONTAINER(RedisModuleCtx *ctx, SPRecordSet *rs, SPPackCont *pc, int lock) {
+static inline void SP_PACK_CONTAINER(SPRecordSet *rs, SPPackCont *pc, int lock) {
 	if (lock) SPWriteLock(rs->lzwLock);
 	if (!SPPackContFull(pc)) {
 		if (lock) SPWriteUnlock(rs->lzwLock);
@@ -172,17 +178,28 @@ void SP_PACK_CONTAINER(RedisModuleCtx *ctx, SPRecordSet *rs, SPPackCont *pc, int
 	SPRecordId rid;
 	int dstCapacity;
 	pc->oSize = 0;
-
-	RedisModuleString *tmp = RedisModule_CreateString(ctx, "", 0);
+	// UT_string *tmp;
+	// utstring_new(tmp);
+	char *buff = NULL;
+	// int bufflen = 0;
+	// RedisModuleString *tmp = RedisModule_CreateString(ctx, "", 0);
 	for (size_t i = 0; i < count; ++i)
 	{
+		
 		rid = kv_A(pc->records, i);
 		raw = &rid.record->rawDoc;
-		RedisModule_StringAppendBuffer(ctx, tmp, raw->unpacked, raw->oSize);
+		buff = RedisModule_Realloc(buff, (pc->oSize + raw->oSize) * sizeof(char));
+		memcpy(buff + pc->oSize, raw->unpacked, raw->oSize);
+		// if (i == 0) {
+		// 	utstring_print(tmp, raw->unpacked);
+		// } else {
+		// utstring_bincpy(tmp, raw->unpacked, raw->oSize - 1);	
+		// }
+		// RedisModule_StringAppendBuffer(ctx, tmp, raw->unpacked, raw->oSize);
 		pc->oSize += raw->oSize;
 	}
 
-	const char *bytes = RedisModule_StringPtrLen(tmp, NULL);
+	// char *bytes = utstring_body(tmp);// RedisModule_StringPtrLen(tmp, NULL);
 	dstCapacity = LZ4_COMPRESSBOUND(pc->oSize);
 	if (pc->bytes) {
 		pc->bytes = RedisModule_Realloc(pc->bytes, dstCapacity * sizeof(char));	
@@ -190,7 +207,7 @@ void SP_PACK_CONTAINER(RedisModuleCtx *ctx, SPRecordSet *rs, SPPackCont *pc, int
 		pc->bytes = RedisModule_Alloc(dstCapacity * sizeof(char));	
 	}
 	
-	pc->cSize = LZ4_compress_fast(bytes, pc->bytes, pc->oSize, dstCapacity, 2);
+	pc->cSize = LZ4_compress_fast(buff, pc->bytes, pc->oSize, dstCapacity, 2);
 	pc->bytes = RedisModule_Realloc(pc->bytes, pc->cSize * sizeof(char));
 
 	for (size_t i = 0; i < count; ++i)
@@ -202,20 +219,22 @@ void SP_PACK_CONTAINER(RedisModuleCtx *ctx, SPRecordSet *rs, SPPackCont *pc, int
 	}
 	pc->packed = 1;
 	if (lock) SPWriteUnlock(rs->lzwLock);
-	RedisModule_FreeString(ctx, tmp);
+	// utstring_free(tmp);
+	// RedisModule_FreeString(ctx, tmp);
+	RedisModule_Free(buff);
 }
 
-static inline void SP_REPLACE_RID(RedisModuleCtx *ctx, SPRecordSet *rs, SPRecordId rid, const char *doc, size_t doclen) {
+static inline void SP_REPLACE_RID(SPRecordSet *rs, SPRecordId rid, const char *doc, size_t doclen) {
 	SPPackCont *pc = rid.record->pc;
 	SPRawDoc *raw = &rid.record->rawDoc;
 	SP_UNPACK_ALL(rs, pc, NULL);
 	if (raw->unpacked) RedisModule_Free(raw->unpacked);
 	raw->unpacked = RedisModule_Strdup(doc);
 	raw->oSize = doclen;
-	SP_PACK_CONTAINER(ctx, rs, pc, 0);
+	SP_PACK_CONTAINER(rs, pc, 0);
 }
 
-static inline void SP_PACK_DOC(RedisModuleCtx *ctx, SPRecordSet *rs, const char *doc, size_t doclen, SPRecordId rid, int lock) {
+static inline void SP_PACK_DOC(SPRecordSet *rs, const char *doc, size_t doclen, SPRecordId rid, int lock) {
     if (doc == NULL) return;
     // SPRawDoc lzw = rid.record->rawDoc;
 
@@ -229,11 +248,11 @@ static inline void SP_PACK_DOC(RedisModuleCtx *ctx, SPRecordSet *rs, const char 
     	rid.record->rawDoc.unpacked = RedisModule_Strdup(doc);
 	    rid.record->rawDoc.oSize = doclen;	
 	    //pack all
-	    SP_PACK_CONTAINER(ctx, rs, rid.record->pc, 0);
+	    SP_PACK_CONTAINER(rs, rid.record->pc, 0);
     } else if (full && rid.record->pc->packed) {
     	// this is a pre-existing record that has been packed.
     	// repack for this doc
-    	SP_REPLACE_RID(ctx, rs, rid, doc, doclen);
+    	SP_REPLACE_RID(rs, rid, doc, doclen);
     } else {
     	// pack container is not full yet
     	if (rid.record->rawDoc.unpacked) {
@@ -308,7 +327,7 @@ static inline void SPReleasePackCont(RedisModuleCtx *ctx, SPRecordSet *rs, SPRec
 			trid.record->pc = NULL; //!important!
 			if (trid.id != rid.id) { //ignore the record to be deleted
 				if (SPAcquirePackCont(rs, trid)) {
-					SP_PACK_CONTAINER(ctx, rs, trid.record->pc, 0);
+					SP_PACK_CONTAINER(rs, trid.record->pc, 0);
 				}
 			}
 		});
@@ -318,6 +337,49 @@ static inline void SPReleasePackCont(RedisModuleCtx *ctx, SPRecordSet *rs, SPRec
 	}
 }
 
+/*
+	deleteing unused record objects.
+	the reaosn we don't jsut detroy them right away is becuase the ptr
+	may actually be referenced by a cursor
+	this was the only obvious way to allow cursors on multiple threads
+	without locking the entire record set for their lifespan
+*/
+void *SPDeleteThread(void *arg) {
+	SPRecordSet *rs = arg;
+	int run = 1;
+	while (run) {
+		sleep(SP_RS_DEL_INTERVAL);
+		// printf("Grabbin read lock\n");
+		SPReadLock(rs->lock);
+		// printf("Grabbed read lock\n");
+		run = rs->delrun;
+		SPReadUnlock(rs->lock);
+		if (run) {
+			long long oldestCursor = SPOldestCursorTime();
+			// printf("Grabbin del lock\n");
+			SPWriteLock(rs->deleteLock);
+			// printf("Grabbed del lock\n");
+			SPDeletedRecordVec ndrvec;
+			SPDeletedRecordVec old = rs->deleted;
+			kv_init(ndrvec);
+			SPDeletedRecord cand;
+			
+			while(kv_size(old)) {
+				cand = kv_pop(old);
+				if (cand.date < oldestCursor) {
+					SPDestroyRecord(cand.rid, rs);
+				} else {
+					kv_push(SPDeletedRecord, ndrvec, cand);
+				}
+			}
+			rs->deleted = ndrvec;
+			kv_destroy(old);
+			SPWriteUnlock(rs->deleteLock);
+		}
+		
+	}
+	return NULL;
+}
 
 SPRecordSet *SPCreateRecordSet(SPNamespace *ns) {
 	SPRecordSet *rs = RedisModule_Calloc(1, sizeof(SPRecordSet));
@@ -328,13 +390,16 @@ SPRecordSet *SPCreateRecordSet(SPNamespace *ns) {
 	SPLockInit(rs->deleteLock);
 	SPLockInit(rs->lzwLock);
 	kv_init(rs->packStack);
+	rs->delrun = 1;
+	pthread_create(&rs->deleteThread, NULL, SPDeleteThread, rs);
+	pthread_detach(rs->deleteThread);
 	// rs->unpackBuff = RedisModule_Alloc( SP_UNPACK_BUFF_SZ * sizeof(char) );
 	// rs->decompressStream = LZ4_createStreamDecode();
  //    rs->compressStream = LZ4_createStream();
 	return rs;
 }
 
-SPRecordId *SPRecordSetToArray(SPRecordSet *rs, int *len) {
+SPRecordId *SPRecordSetToArray(SPRecordSet *rs, size_t *len) {
 	// SPReadLock(rs->lock);
 	size_t pos = 0;
 	SPRecordId *a = RedisModule_Alloc(sizeof(SPRecordId) * kh_size(rs->docs));
@@ -351,7 +416,7 @@ SPRecordId *SPRecordSetToArray(SPRecordSet *rs, int *len) {
 }
 
 
-SPRecordId *SPResultSetToArray(khash_t(SIDS) *set, int *len) {
+SPRecordId *SPResultSetToArray(khash_t(SIDS) *set, size_t *len) {
 	// SPReadLock(rs->lock);
 	size_t pos = 0;
 	SPRecordId *a = RedisModule_Alloc(sizeof(SPRecordId) * kh_size(set));
@@ -370,6 +435,13 @@ SPRecordId *SPResultSetToArray(khash_t(SIDS) *set, int *len) {
 }
 
 void SPDestroyRecordSet(SPRecordSet *rs) {
+	SPWriteLock(rs->lock);
+	rs->delrun = 0;
+	SPWriteLock(rs->lzwLock);
+	SPWriteLock(rs->deleteLock);
+	
+	pthread_cancel(rs->deleteThread);
+
 	for (khint_t k = 0; k < kh_end(rs->docs); ++k) {
         if (kh_exist(rs->docs, k)) {
             SPDestroyRecord(kh_value(rs->docs, k), rs);
@@ -378,11 +450,17 @@ void SPDestroyRecordSet(SPRecordSet *rs) {
 	kh_destroy(MSTDOC,rs->docs);
 
 	while(kv_size(rs->deleted)) {
-		SPDestroyRecord(kv_pop(rs->deleted), rs);
+		SPDestroyRecord(kv_pop(rs->deleted).rid, rs);
 	}
 	kv_destroy(rs->deleted);
 
+
+	SPWriteUnlock(rs->deleteLock);
+	SPWriteUnlock(rs->lzwLock);
+	SPWriteUnlock(rs->lock);
+
 	SPLockDestroy(rs->lock);
+	SPLockDestroy(rs->lzwLock);
 	SPLockDestroy(rs->deleteLock);
 	RedisModule_Free(rs);
 }
@@ -425,12 +503,16 @@ int SPDeleteRecord(RedisModuleCtx *ctx, SPNamespace *ns, const char *id) {
 			SPWriteLock(rs->lzwLock);
 			SPReleasePackCont(ctx, rs, rid);
 			SPWriteUnlock(rs->lzwLock);
-			
+
+			SPWriteLock(rs->deleteLock);
+
 			if (rid.record->rawDoc.unpacked) {
 				// printf("Freeing doc\n");
 				RedisModule_Free(rid.record->rawDoc.unpacked);
+				rid.record->rawDoc.unpacked = NULL;
 			}
 			rid.record->rawDoc.oSize = 0;
+			rid.record->pc = NULL;
 			rec->exists = 0;
 			kh_del(MSTDOC, rs->docs, k);
 			SPWriteUnlockRP(rs->lock);
@@ -439,19 +521,17 @@ int SPDeleteRecord(RedisModuleCtx *ctx, SPNamespace *ns, const char *id) {
 			RedisModule_Free(rid.record->fields);
 			rid.record->fields = NULL;
 			
-			SPWriteLock(rs->deleteLock);
 			// SPDestroyRecord(rid, rs);
-			kv_push(SPRecordId, rs->deleted, rid);
+			SPDeletedRecord dr = {.rid = rid, .date = RedisModule_Milliseconds()};
+			kv_push(SPDeletedRecord, rs->deleted, dr);
 			// kh_put(SIDS, rs->deleted, rid.id, &absent);
 			SPWriteUnlock(rs->deleteLock);
 			
 
-		} else {
-			SPWriteUnlockRP(rs->lock);
 		}
-	} else {
-		SPWriteUnlockRP(rs->lock);
 	}
+	SPWriteUnlockRP(rs->lock);
+	
 	
 	// SPReadUnlock(ns->lock);
 	return res;
@@ -533,8 +613,10 @@ void SPReadRecordSetFromRDB(RedisModuleCtx *ctx, RedisModuleIO *io, SPNamespace 
 			kh_value(rs->docs, k) = rid;
 		}
 		// printf("6\n");
+		// rid.record->kson = kson_parse(doc, ns);
+
 		SPWriteLock(rs->lzwLock);
-		SP_PACK_DOC(ctx, rs, doc, doclen, rid, 0);
+		SP_PACK_DOC(rs, doc, doclen, rid, 0);
 		SPWriteUnlock(rs->lzwLock);
 
 		RedisModule_FreeString(ctx, tmp1);
@@ -569,22 +651,26 @@ void SPReadRecordSetFromRDB(RedisModuleCtx *ctx, RedisModuleIO *io, SPNamespace 
 }
 
 void SPSaveRecordSetToRDB(RedisModuleCtx *ctx, RedisModuleIO *io, SPRecordSet *rs, SPNamespace *ns) {
+
+	SPReadLock(ns->lock);
 	SPReadLock(rs->lock);
-	// SPReadLock(rs->lzwLock);
-	
-	RedisModule_SaveUnsigned(io, kh_size(rs->docs));
+	size_t recLen, pos = 0;
+	SPRecordId *rids = SPRecordSetToArray(rs, &recLen);
+	SPReadUnlock(rs->lock);
+	RedisModule_SaveUnsigned(io, recLen);
+
 	khash_t(SIDS) *packs = kh_init(SIDS);
 
 	const char *id;
 	SPRecordId rid;
 	SPRecord *record;
-	SPPackCont *pc;
+	// SPPackCont *pc;
 	SPFieldDef *fd;
 	SPPackContId pcid = {.id = 0};
 	khint_t pk;
 	int absent;
 	SPRawDoc *raw;
-	SPReadLock(rs->lzwLock);
+	
 	// printf("Size on start save = %zu\n", kh_size(rs->docs));
 	long long start = RedisModule_Milliseconds();
 	SPRawDoc *subst = RedisModule_Alloc(SP_PC_LEN * sizeof(SPRawDoc));
@@ -592,28 +678,34 @@ void SPSaveRecordSetToRDB(RedisModuleCtx *ctx, RedisModuleIO *io, SPRecordSet *r
 	{
 		subst[i].unpacked = RedisModule_Alloc(1);
 	}
-	RedisModuleString *tmp;
-	kh_foreach(rs->docs, id, rid, {
+	// kh_foreach(rs->docs, id, rid, {
+	// printf("E\n");
+	
+	// printf("F\n");
+	while (pos < recLen) {
+		rid = rids[pos++];
+	
+		// we're going tp lock.unlock eeach iteration so ass not to completely stop indexing
+		// expensive but necessary
+		SPReadLock(rs->lzwLock);
+		SPReadLock(rs->deleteLock);
+		
+		if (rid.record->pc == NULL || !rid.record->exists) continue;
 		pcid.pc = rid.record->pc;
+
 		//we only want to unpack once per pack container
 		pk = kh_get(SIDS, packs, pcid.id);
 		if (pk == kh_end(packs)) {
 			
-			pc = pcid.pc;
-			SP_UNPACK_ALL(rs, pc, subst);
-			sp_foreach_record_aux(i, pc, raw, rid, {
+			SP_UNPACK_ALL(rs, pcid.pc, subst);
+			sp_foreach_record_aux(i, pcid.pc, raw, rid, {
 				record = rid.record;
 				id = record->sid;
-				tmp = RedisModule_CreateString(ctx, id, strlen(id));
-				RedisModule_SaveString(io, tmp);
-				RedisModule_FreeString(ctx, tmp);
-
-				tmp = RedisModule_CreateString(ctx, subst[i].unpacked, subst[i].oSize);
-				RedisModule_SaveString(io, tmp);
-				RedisModule_FreeString(ctx, tmp);
-
-				// printf("%s\n%s\n", id, subst[i].unpacked);
+				
+				RedisModule_SaveStringBuffer(io, id, strlen(id));
+				RedisModule_SaveStringBuffer(io, subst[i].unpacked, subst[i].oSize);
 				RedisModule_SaveUnsigned(io, kv_size(ns->fields));
+
 				for (int i = 0; i < kv_size(ns->fields); ++i)
 				{
 					fd = SPFieldDefForCharName(ns, kv_A(ns->fields, i));
@@ -621,17 +713,23 @@ void SPSaveRecordSetToRDB(RedisModuleCtx *ctx, RedisModuleIO *io, SPRecordSet *r
 				}
 			});
 			kh_put(SIDS, packs, pcid.id, &absent);
+			
 		}
-	});
+		SPReadUnlock(rs->deleteLock);
+		SPReadUnlock(rs->lzwLock);
+	};
+	// );
 	// printf("Size on end save = %zu\n", kh_size(rs->docs));
-	SPReadUnlock(rs->lzwLock);
-	SPReadUnlock(rs->lock);
+	// printf("G\n");
+	SPReadUnlock(ns->lock);
+	// printf("H\n");
 	kh_destroy(SIDS, packs);
 	for (int i = 0; i < SP_PC_LEN; ++i)
 	{
 		RedisModule_Free(subst[i].unpacked);
 	}
 	RedisModule_Free(subst);
+	RedisModule_Free(rids);
 	printf("Save recordset took %llums\n", RedisModule_Milliseconds() - start);
 }
 
@@ -842,6 +940,69 @@ static inline void SPDoUnIndexFields(SPNamespace *ns, SPRecordId rid, SPFieldDat
 		SPDestroyFieldData(&rid.record->fields[i]);
 	}
 }
+typedef struct {
+	SPNamespace *ns;
+	char *doc;
+	char *sid;
+	size_t doclen;
+	khash_t(FIELDDATA) *tfdata;
+	// SPRecordSet *rs;
+} SPIndexThreadArg;
+
+
+void SPDoIndexingWork(SPIndexThreadArg *arg) {
+	SPNamespace *ns = arg->ns;
+	SPRecordSet *rs = ns->rs;
+	SPReadLock(ns->lock);
+	SPWriteLock(rs->lock);
+
+	char *doc, *sid;
+	doc = arg->doc;
+	sid = arg->sid;//  RedisModule_StringPtrLen(argv[idx++], &doclen);
+	SPRecordId rid;
+	khint_t k;
+	int absent;
+
+	k = kh_get(MSTDOC, rs->docs, sid);
+	if (k != kh_end(rs->docs)) {
+		rid = kh_value(rs->docs, k);
+		// oldvals = rid.record->fields;
+
+		if (rid.record->fields) {
+			SPFieldData *newFields = SPFieldDataHashToArray(arg->tfdata, ns);
+			SPFieldData *oldFields = rid.record->fields;
+			rid.record->fields = newFields;
+			SPReIndexFields(ns, rid, rid.record->fields, newFields);
+			for (int i = 0; i < kv_size(ns->fields); ++i)
+			{
+				SPDestroyFieldData(&oldFields[i]);
+			}
+			RedisModule_Free(oldFields);
+
+		} else {
+			rid.record->fields = SPFieldDataHashToArray(arg->tfdata, ns);
+			SPDoIndexFields(ns, rid, rid.record->fields);	
+		}
+	} else {
+		rid = SPInitRecord(sid, rs->fc);
+		k = kh_put(MSTDOC, rs->docs, rid.record->sid, &absent);
+		kh_value(rs->docs, k) = rid;
+		
+		rid.record->fields = SPFieldDataHashToArray(arg->tfdata, ns);
+		SPDoIndexFields(ns, rid, rid.record->fields);
+	}
+
+	// rid.record->kson = kson_parse(doc, ns);
+	SP_PACK_DOC(rs, doc, arg->doclen, rid, 1);
+
+	SPWriteUnlock(rs->lock);
+	SPReadUnlock(ns->lock);
+
+	RedisModule_Free(arg->sid);
+	RedisModule_Free(arg->doc);
+	kh_destroy(FIELDDATA, arg->tfdata);
+	RedisModule_Free(arg);
+}
 
 int SpredisAddRecord_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 	RedisModule_AutoMemory(ctx);
@@ -858,10 +1019,10 @@ int SpredisAddRecord_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
 	if (ns == NULL) {
 		return RedisModule_ReplyWithNull(ctx);
 	}
-	size_t doclen;
-	SPRecordSet *rs = ns->rs;
+	// size_t doclen;
+	// SPRecordSet *rs = ns->rs;
 	SPReadLock(ns->lock);
-	SPWriteLock(rs->lock);
+	// SPWriteLock(rs->lock);
 	const char *sid = RedisModule_StringPtrLen(argv[2], NULL);
 	
 
@@ -875,6 +1036,8 @@ int SpredisAddRecord_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
 	RedisModuleString *badFieldDef = NULL;
 	SPFieldData data;
 	
+
+
 	khash_t(FIELDDATA) *tfdata = kh_init(FIELDDATA);
 	int absent;
 	khint_t k;
@@ -896,56 +1059,26 @@ int SpredisAddRecord_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
 				SPDestroyFieldData(&data);
 			});
 			badFieldDef = fname;
+			kh_destroy(FIELDDATA, tfdata);
 			break;
 		}
 	}
 
 	if (!badFieldDef) {
-		const char *doc;
-		doc = RedisModule_StringPtrLen(argv[idx++], &doclen);
-		SPRecordId rid;
-		khint_t k;
-		int absent;
 
-		k = kh_get(MSTDOC, rs->docs, sid);
-		if (k != kh_end(rs->docs)) {
-			rid = kh_value(rs->docs, k);
-			// oldvals = rid.record->fields;
-
-			if (rid.record->fields) {
-				SPFieldData *newFields = SPFieldDataHashToArray(tfdata, ns);
-				SPFieldData *oldFields = rid.record->fields;
-				rid.record->fields = newFields;
-				SPReIndexFields(ns, rid, rid.record->fields, newFields);
-				for (int i = 0; i < kv_size(ns->fields); ++i)
-				{
-					SPDestroyFieldData(&oldFields[i]);
-				}
-				RedisModule_Free(oldFields);
-
-			} else {
-				rid.record->fields = SPFieldDataHashToArray(tfdata, ns);
-				SPDoIndexFields(ns, rid, rid.record->fields);	
-			}
-		} else {
-			rid = SPInitRecord(sid, rs->fc);
-			k = kh_put(MSTDOC, rs->docs, rid.record->sid, &absent);
-			kh_value(rs->docs, k) = rid;
-			
-			rid.record->fields = SPFieldDataHashToArray(tfdata, ns);
-			SPDoIndexFields(ns, rid, rid.record->fields);
-		}
-		SP_PACK_DOC(ctx, rs, doc, doclen, rid, 1);
-		//temp
+		SPIndexThreadArg *arg = RedisModule_Alloc(sizeof(SPIndexThreadArg));
+		arg->doc = RedisModule_Strdup(RedisModule_StringPtrLen(argv[idx++], &arg->doclen));
+		arg->sid = RedisModule_Strdup(sid);
+		arg->tfdata = tfdata;
+		arg->ns = ns;
+		// SPReadLock(ns->lock);
+		SPDoWorkInThreadPool(SPDoIndexingWork, arg);
 		
-		// rid.record->fields = NULL;
+	} else {
+		kh_destroy(FIELDDATA, tfdata);
 	}
 
 
-	kh_destroy(FIELDDATA, tfdata);
-
-
-	SPWriteUnlock(rs->lock);
 	SPReadUnlock(ns->lock);
 	RedisModule_ReplicateVerbatim(ctx);
 
@@ -1039,4 +1172,55 @@ SPPerms SPCompositePermutationsForRecord(SPNamespace *ns, SPRecord *record, SPFi
 		}
 	}
 	return perms;
+}
+
+
+
+
+int SpredisStoreRecords_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+	RedisModuleKey *key = NULL;
+	SPNamespace *ns;
+
+	RedisModuleString *keyName = argv[1];
+	SPLockContext(ctx);
+	int res = SPGetNamespaceKeyValue(ctx, &key, &ns, keyName, REDISMODULE_WRITE);
+	SPUnlockContext(ctx);
+
+	if (res != REDISMODULE_OK) {
+		return res;
+	}
+	if (ns == NULL) {
+		return RedisModule_ReplyWithLongLong(ctx, 0);
+	}
+
+	khash_t(SIDS) *store = SPGetTempSet(argv[2]);
+    khash_t(SIDS) *hint = SPGetHintSet(argv[3]);
+    if (hint != NULL && kh_size(hint) == 0) return RedisModule_ReplyWithLongLong(ctx,0);
+
+	SPReadLock(ns->lock);
+
+	SPRecordSet *rs = ns->rs;
+
+	SPReadLock(rs->lock);
+	khint_t k;
+	SPRecordId rid;
+	int absent;
+	for (int i = 4; i < argc; ++i)
+	{
+		k = kh_get(MSTDOC, rs->docs, RedisModule_StringPtrLen( argv[i], NULL ));
+		if ( k != kh_end(rs->docs)) {
+			rid = kh_value(rs->docs, k);
+			if (hint == NULL || kh_contains(SIDS, hint, rid.id)) kh_put(SIDS, store, rid.id, &absent);
+		}
+	}
+
+    SPReadUnlock(rs->lock);
+    SPReadUnlock(ns->lock);
+	
+	RedisModule_ReplyWithLongLong(ctx, kh_size(store));
+	return REDISMODULE_OK;
+}
+
+int SpredisStoreRecords_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+	return SPThreadedWork(ctx, argv, argc, SpredisStoreRecords_RedisCommandT);
 }

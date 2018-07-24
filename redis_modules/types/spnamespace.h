@@ -26,7 +26,7 @@ SPIndexCont *SPIndexForFieldName(SPNamespace *ns, RedisModuleString *name);
 SPIndexCont *SPIndexForFieldCharName(SPNamespace *ns, const char *name);
 int SPFieldIndex(SPNamespace *ns, const char *name);
 // const char *SPNSUniqStr(SPNamespace *ns, const char *str);
-
+// const char *SPNSUniqStrWithFree(SPNamespace *ns, const char *str, void (*freeit)(void*));
 
 int SpredisDeleteTempSet_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 khash_t(SIDS) *SPGetTempSet(RedisModuleString *tname);

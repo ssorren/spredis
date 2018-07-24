@@ -19,12 +19,34 @@ void SPSaveFieldToRDB(RedisModuleCtx *ctx, RedisModuleIO *io, SPFieldDef *fd);
 SPFieldDef *SPReadFieldFromRDB(RedisModuleCtx *ctx, RedisModuleIO *io, SPNamespace *ns);
 // static const char *EMPTY_STRING = "";
 
+// const char *SPNSUniqStrWithFree(SPNamespace *ns, const char *str, void (*freeit)(void*)) {
+//     if (str == NULL) return NULL;
+//     // SPReadLock(ns->strLock);
+//     khint_t k = kh_get(STR, ns->uniq, str);
+//     if (k == kh_end(ns->uniq)) {
+//     	// SPReadUnlock(ns->strLock);
+//      //    SPWriteLock(ns->strLock); //possible memory leak here, but willing to accpet it for performance
+//         int a;
+//         char *key = RedisModule_Strdup(str);
+//         kh_put(STR, ns->uniq, key, &a);
+//         // SPWriteUnlock(ns->strLock);
+//         if (freeit) freeit((char *)str);
+//         return key;
+//     }
+//     if (freeit && kh_key(ns->uniq, k) != str) freeit((char *)str);
+//     // SPReadUnlock(ns->strLock);
+//     return kh_key(ns->uniq, k);
+// }
+
+/*
+	SPNSUniqStr - NOT THREAD SAFE!, only call from main thread!
+*/
 static inline const char *SPNSUniqStr(SPNamespace *ns, const char *str) {
-    if (str == NULL) return NULL;
+	if (str == NULL) return NULL;
     khint_t k = kh_get(STR, ns->uniq, str);
     if (k == kh_end(ns->uniq)) {
         int a;
-        const char *key = RedisModule_Strdup(str);
+        char *key = RedisModule_Strdup(str);
         kh_put(STR, ns->uniq, key, &a);
         return key;
     }
@@ -497,6 +519,8 @@ SPNamespace *SPInitNamespace() {
 	SPNamespace *ns = RedisModule_Calloc(1, sizeof(SPNamespace));
 	SPLockInit(ns->lock);
 	SPLockInit(ns->indexLock);
+	SPLockInit(ns->strLock);
+	
 	// SPLockInit(ns->temps.lock);
 	kv_init(ns->fields);
 	kv_init(ns->composites);
@@ -532,6 +556,7 @@ void SPCompDestroy (kbtree_t(COMPIDX) *btree) {
 void SPDestroyNamespace(SPNamespace *ns) {
 	SPWriteLock(ns->lock);
 	SPWriteLock(ns->indexLock);
+	SPWriteLock(ns->strLock);
 	const char *fid;
 	SPIndexCont *indexCont;
 	kh_foreach(ns->indeces, fid, indexCont, {
@@ -563,8 +588,11 @@ void SPDestroyNamespace(SPNamespace *ns) {
 	kh_destroy(INDECES, ns->indeces);
 	SPWriteUnlock(ns->lock);
 	SPWriteUnlock(ns->indexLock);
+	SPWriteUnlock(ns->strLock);
 	SPLockDestroy(ns->lock);
 	SPLockDestroy(ns->indexLock);
+	SPLockDestroy(ns->strLock);
+	
 	kv_destroy(ns->fields);
 	// kv_destroy(ns->types);
 	kv_destroy(ns->composites);
@@ -685,7 +713,6 @@ void SPSaveNamespaceToRDB(RedisModuleCtx *ctx, RedisModuleIO *io, SPNamespace *n
 		def = kh_value(ns->defs, k);
 		SPSaveFieldToRDB(ctx, io, def);
 	}
-
 	RedisModule_SaveUnsigned(io, kv_size(ns->composites));
 	for (size_t i = 0; i < kv_size(ns->composites); ++i)
 	{
@@ -694,7 +721,6 @@ void SPSaveNamespaceToRDB(RedisModuleCtx *ctx, RedisModuleIO *io, SPNamespace *n
 		def = kh_value(ns->defs, k);
 		SPSaveFieldToRDB(ctx, io, def);
 	}
-
 	SPSaveRecordSetToRDB(ctx, io, ns->rs, ns);
 	SPReadUnlock(ns->lock);
 }

@@ -14,7 +14,9 @@ typedef struct _SPCursors {
     khash_t(CURSORS) *cursors;
 } SPCursors;
 
-SPItem *SPSetToItems(khash_t(SIDS) *set, size_t *size, SPSortData *sortDatas) {
+// typedef SPItem* SPItemPtr;
+
+SPItem *SPSetToItems(khash_t(SIDS) *set, size_t *size, SPPtrOrD_t *sortDatas, int sortCount) {
 	SPItem *a = RedisModule_Calloc( kh_size(set), sizeof(SPItem) );
 	spid_t id;
 	SPRecordId rid;
@@ -24,7 +26,7 @@ SPItem *SPSetToItems(khash_t(SIDS) *set, size_t *size, SPSortData *sortDatas) {
 		if (rid.record->exists) {
 			a[pos].record = rid.record;
 			// printf("%s %d\n", a[pos].record->sid, sortDatas == NULL);
-			a[pos].sortData = sortDatas ? &sortDatas[pos] : NULL;
+			a[pos].sortData = sortDatas ? &sortDatas[pos * sortCount] : NULL;
 			pos++;
 		}
 	});
@@ -39,19 +41,21 @@ typedef void (*SPItemResolver)(SPItem*, SPItemFieldSort*);
 typedef int (*SPItemComp)(SPPtrOrD_t a,SPPtrOrD_t b);
 
 int SPDoubleLTASC(SPPtrOrD_t a,SPPtrOrD_t b) {
-	return (((b.asDouble) < (a.asDouble)) - ((a.asDouble) < (b.asDouble)));;
+	return (a.asDouble) < (b.asDouble) ? -1 : (a.asDouble) > (b.asDouble);
+	// (((b.asDouble) < (a.asDouble)) - ((a.asDouble) < (b.asDouble)));;
 }
 
 int SPDoubleLTDESC(SPPtrOrD_t a,SPPtrOrD_t b) {
-	return (((a.asDouble) < (b.asDouble)) - ((b.asDouble) < (a.asDouble)));
+	return (b.asDouble) < (a.asDouble) ? -1 : (b.asDouble) > (a.asDouble);
+	// return (((a.asDouble) < (b.asDouble)) - ((b.asDouble) < (a.asDouble)));
 }
 
 int SPLexLTASC(SPPtrOrD_t a,SPPtrOrD_t b) {
-	return strcmp(a.asChar, b.asChar);
+	return a.asChar != b.asChar ? strcmp(a.asChar, b.asChar) : 0;
 }
 
 int SPLexLTDESC(SPPtrOrD_t a,SPPtrOrD_t b) {
-	return strcmp(b.asChar, a.asChar);
+	return a.asChar != b.asChar ? strcmp(b.asChar, a.asChar) : 0;
 }
 
 struct _SPItemFieldSort {
@@ -69,16 +73,16 @@ typedef struct _SPItemSortCtx {
 
 } SPItemSortCtx;
 
-static inline int SPCursorLTCompare(SPItem a, SPItem b, SPItemSortCtx *ctx) {
+static inline int SPCursorMCLTCompare(SPItem a, SPItem b, SPItemSortCtx *ctx) {
 	int i = 0;
 	// printf("SPCursorLTCompare %d\n", ctx->count);
 	int res;
 	while (i < ctx->count) {
-		res = ctx->comps[i]( a.sortData->data[i], b.sortData->data[i]); 
+		res = ctx->comps[i]( a.sortData[i], b.sortData[i]); 
 		// if ( ctx->comps[i]( a.sortData[i], b.sortData[i] )) {
 			// printf("SPCursorLTCompare 1 %d, %d\n", ctx->count, i);
-		if (res < 0) return 1;
-		if (res > 0) return 0;
+		if (res) return (res < 0);
+		// if (res > 0) return 0;
 		// }
 		// printf("SPCursorLTCompare 2 %d, %d\n", ctx->count, i);
 		i++;
@@ -86,7 +90,12 @@ static inline int SPCursorLTCompare(SPItem a, SPItem b, SPItemSortCtx *ctx) {
 	return 0; //(uint64_t)a.record < (uint64_t)b.record;
 }
 
-SPREDIS_SORT_STRUCT_INIT(Item, SPItem, SPItemSortCtx*, SPCursorLTCompare);
+static inline int SPCursorSCLTCompare(SPItem a, SPItem b, SPItemSortCtx *ctx) {
+	return ((*ctx->comps)( *a.sortData, *b.sortData) < 0);
+}
+
+SPREDIS_SORT_STRUCT_INIT(MCItem, SPItem, SPItemSortCtx*, SPCursorMCLTCompare);
+SPREDIS_SORT_STRUCT_INIT(SCItem, SPItem, SPItemSortCtx*, SPCursorSCLTCompare);
 
 void SpredisCursorInit() {
 	CursorHash = RedisModule_Calloc(1, sizeof(SPCursors));
@@ -141,7 +150,7 @@ void SPGeoSortResolver(SPItem *item, SPItemFieldSort *fs) {
 		SPGeoHashDecode(vals->iv[0].asUInt, &lat, &lon);
 		distance.asDouble = SPGetDist(fs->lat, fs->lon, lat, lon);
 	}
-	item->sortData->data[ fs->resIndex ] = distance;
+	item->sortData[ fs->resIndex ] = distance;
 }
 
 void SPValueSortResolver(SPItem *item, SPItemFieldSort *fs) {
@@ -150,7 +159,7 @@ void SPValueSortResolver(SPItem *item, SPItemFieldSort *fs) {
 	if (vals->ilen && vals->iv) {
 		val = vals->iv[0];
 	}
-	item->sortData->data[ fs->resIndex ] = val;
+	item->sortData[ fs->resIndex ] = val;
 }
 
 void SPLexSortResolver(SPItem *item, SPItemFieldSort *fs) {
@@ -161,7 +170,7 @@ void SPLexSortResolver(SPItem *item, SPItemFieldSort *fs) {
 	} else if (vals->ilen && vals->iv) {
 		val = vals->iv[0];
 	}
-	item->sortData->data[ fs->resIndex ] = val;
+	item->sortData[ fs->resIndex ] = val;
 }
 
 int SPPrepareSortData(RedisModuleCtx *ctx, RedisModuleString **argv, int sortCount, int argLimit, SPItemSortCtx *sctx, SPNamespace *ns) {
@@ -218,9 +227,47 @@ typedef struct _SPItemResolveArg {
 	SPItemSortCtx *sctx;	
 } SPItemResolveArg;
 
-static void DOSPResolveSortValues(void *arg) {
+static void DOSPResolveMCSortValues(void *arg) {
 	SPItemResolveArg *ra = arg;
 	int scnt = ra->sctx->count;
+	// printf("scnt %d\n", scnt);
+	SPItem *item, *items = ra->items;;
+	SPItemFieldSort *sorts = ra->sctx->sorts;
+	SPItemResolver *resolvers = ra->sctx->resolvers;
+	size_t start = ra->start, end = ra->end;
+	int k;
+	while (start < end)
+	{
+		item = &items[start++];
+		for (k = 0; k < scnt; ++k)
+		{
+			resolvers[k](item, &sorts[k]);
+		}
+	}
+}
+
+static void DOSPResolveMCResumeSortValues(void *arg) {
+	SPItemResolveArg *ra = arg;
+	int scnt = ra->sctx->count;
+	// printf("scnt %d\n", scnt);
+	SPItem *item, *items = ra->items;;
+	SPItemFieldSort *sorts = ra->sctx->sorts;
+	SPItemResolver *resolvers = ra->sctx->resolvers;
+	size_t start = ra->start, end = ra->end;
+	int k;
+	while (start < end)
+	{
+		item = &items[start++];
+		for (k = 1; k < scnt; ++k)
+		{
+			resolvers[k](item, &sorts[k]);
+		}
+	}
+}
+
+static void DOSPResolveSCSortValues(void *arg) {
+	SPItemResolveArg *ra = arg;
+	// int scnt = ra->sctx->count;
 	// printf("scnt %d\n", scnt);
 	SPItem *item, *items = ra->items;;
 	SPItemFieldSort *sorts = ra->sctx->sorts;
@@ -230,18 +277,20 @@ static void DOSPResolveSortValues(void *arg) {
 	while (start < end)
 	{
 		item = &items[start++];
-		for (int k = 0; k < scnt; ++k)
-		{
-			resolvers[k](item, &sorts[k]);
-		}
+		(*resolvers)(item, sorts);
 	}
 }
-static void SPResolveSortValues(size_t count, SPItem *items, SPItemSortCtx *sctx) {
+static void SPResolveSortValues(size_t count, SPItem *items, SPItemSortCtx *sctx, void (*resolve)(void*)) {
 	// printf("count: %zu\n", count);
 	if (count < SP_PTHRESHOLD) {
 	// if (count < 100000000) {
 		SPItemResolveArg ra = {.start=0, .end=count, .items = items, .sctx = sctx};
-		DOSPResolveSortValues(&ra);
+		resolve(&ra);
+		// if (sctx->count > 1) {
+		// 	DOSPResolveMCSortValues(&ra);
+		// } else {
+		// 	DOSPResolveSCSortValues(&ra);
+		// }
 	} else {
 		//Let's do some parallel processing
 		size_t start = 0;
@@ -251,7 +300,7 @@ static void SPResolveSortValues(size_t count, SPItem *items, SPItemSortCtx *sctx
         void (*func[SP_PQ_TCOUNT_SIZE])(void*);
         for (int j = 0; j < SP_PQ_TCOUNT_SIZE; ++j)
         {
-            func[j] = DOSPResolveSortValues;
+            func[j] = resolve;//(sctx->count > 1) ? DOSPResolveMCSortValues : DOSPResolveSCSortValues;
             arg = RedisModule_Calloc(1, sizeof(SPItemResolveArg));
             pargs[j] = arg;
             arg->start = start;
@@ -295,15 +344,19 @@ int SpredisPrepareCursor_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
 	lang =  argv[4];
 
 	long long read;
-	int sortCount = 0, start = 0, end = 0, idsOnly = 0, parseOk;
+	int sortCount = 0, start = 0, end = 0, idsOnly = 0, parseOk, exprCount;
 
 	parseOk = RedisModule_StringToLongLong(argv[5], &read);
 	sortCount = parseOk == REDISMODULE_OK ? (int)read : 0;
+
 	parseOk = RedisModule_StringToLongLong(argv[6], &read);
-	start = parseOk == REDISMODULE_OK ? (int)read : 0;
+	exprCount = parseOk == REDISMODULE_OK ? (int)read : 0;
+
 	parseOk = RedisModule_StringToLongLong(argv[7], &read);
-	end = parseOk == REDISMODULE_OK ? (int)read : 0;
+	start = parseOk == REDISMODULE_OK ? (int)read : 0;
 	parseOk = RedisModule_StringToLongLong(argv[8], &read);
+	end = parseOk == REDISMODULE_OK ? (int)read : 0;
+	parseOk = RedisModule_StringToLongLong(argv[9], &read);
 	idsOnly = parseOk == REDISMODULE_OK ? (int)read : 0;
 
 	if (sortCount > SP_MAX_SORT_FIELDS) {
@@ -322,15 +375,15 @@ int SpredisPrepareCursor_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
     // printf("F\n");
     
     // printf("Preparing sort data\n");
-    // long long tstart = RedisModule_Milliseconds();
-    SPSortData *sd = sortCount ? RedisModule_Alloc(kh_size(result) * sizeof(SPSortData)) : NULL;
+    long long tstart = RedisModule_Milliseconds();
+    SPPtrOrD_t *sd = sortCount ? RedisModule_Alloc(kh_size(result) * sortCount * sizeof(SPSortData)) : NULL;
     size_t len;
-    SPItem *items = SPSetToItems( result, &len, sd );
-    // printf("Alloc and s2a took %llu\n", RedisModule_Milliseconds() - tstart);
+    SPItem *items = SPSetToItems( result, &len, sd , sortCount);
+    printf("Alloc and s2a took %llu\n", RedisModule_Milliseconds() - tstart);
     // printf("Done with result %s, %zu\n", RedisModule_StringPtrLen(argv[3], NULL), kh_size(result));
     cursor->items = items;
     cursor->count = len;
-
+    cursor->created = RedisModule_Milliseconds();
     // printf("cursor %s: %zu\n", cursorName, cursor->count);
 
     SPWriteLock(CursorHash->lock);
@@ -353,20 +406,56 @@ int SpredisPrepareCursor_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
 	if (sortCount) {
 		// printf("Preparing sort data, %d\n", sortCount);
 		SPItemSortCtx sctx;
-		pres = SPPrepareSortData(ctx, argv + 9, sortCount, argc - 9, &sctx, ns);
+		pres = SPPrepareSortData(ctx, argv + 10, sortCount, argc - 10, &sctx, ns);
 		sctx.count = sortCount;
 		if (pres == REDISMODULE_OK) {
 			// if (sctx.resolverCount) {
 			// 	//ResolveExpressionValues
 			// }
-			// tstart = RedisModule_Milliseconds();
-			SPResolveSortValues(cursor->count, cursor->items, &sctx);
-			// printf("Resolve took %llu\n", RedisModule_Milliseconds() - tstart);
-			// tstart = RedisModule_Milliseconds();
+			size_t newStart = start;
+			size_t newEnd = end + start;
+			if (newEnd > cursor->count) newEnd = cursor->count;
+			tstart = RedisModule_Milliseconds();
 
-			SpredisItemSort(cursor->count, cursor->items, &sctx);
+			if (sortCount > 1) {
+				SPItem a, b;
+				SPItemComp comp = sctx.comps[0];
+				if (cursor->count < 128 || newEnd >= cursor->count) { //small list have little effect, let's keep it simple
+					SPResolveSortValues(cursor->count, cursor->items, &sctx, DOSPResolveMCSortValues);	
+					SpredisMCItemSort(cursor->count, cursor->items, &sctx);	
+				} else {
+					//we're going to sort the entire list bu the first column and then get our bearings
+					SPResolveSortValues(cursor->count, cursor->items, &sctx, DOSPResolveSCSortValues);
+					SpredisSCItemSort(cursor->count, cursor->items, &sctx);
 
-			// printf("Sort took %llu\n", RedisModule_Milliseconds() - tstart);
+					// we need to find the beginning of the series of the first value in the result
+					while (newStart) {
+						a = cursor->items[newStart];
+						b = cursor->items[newStart - 1];
+						if (!comp(*a.sortData, *b.sortData)) break;
+						newStart--;
+					}
+					// we need to find the end of the series of the last value in the result
+					while (newEnd < cursor->count - 1) {
+						a = cursor->items[newEnd];
+						b = cursor->items[newEnd + 1];
+						if (!comp(*a.sortData, *b.sortData)) break;
+						newEnd++;
+					}
+					SPResolveSortValues(cursor->count, cursor->items, &sctx, DOSPResolveMCResumeSortValues);
+					SpredisMCItemSort(newEnd - newStart, cursor->items + newStart, &sctx);
+
+
+
+				}
+				
+			} else {
+				SPResolveSortValues(cursor->count, cursor->items, &sctx, DOSPResolveSCSortValues);	
+				SpredisSCItemSort(cursor->count, cursor->items, &sctx);
+			}
+			
+
+			printf("Sort took %llu\n", RedisModule_Milliseconds() - tstart);
 		}
 		SPDestroyItemSortCtxContents(&sctx);
 	}
@@ -454,7 +543,19 @@ SPCursor *SPGetCursor(RedisModuleString *tname) {
 	return c;
 }
 
+long long SPOldestCursorTime() {
+	long long time = LLONG_MAX;
+	SPReadLock(CursorHash->lock);
+	const char *id;
+	SPCursor *c;
+	kh_foreach(CursorHash->cursors, id, c, {
+		time = c->created < time ? c->created : time;
+	});
+	SPReadUnlock(CursorHash->lock);
+	return time;
+}
+
 int SpredisPrepareCursor_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 	// return RedisModule_ReplyWithLongLong(ctx, 0);
-	return SPThreadedWork(ctx, argv, argc, SpredisPrepareCursor_RedisCommandT);;
+	return SPThreadedWork(ctx, argv, argc, SpredisPrepareCursor_RedisCommandT);
 }

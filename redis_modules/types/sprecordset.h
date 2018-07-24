@@ -8,8 +8,8 @@ SPRecordId SPInitRecord(const char *id, uint8_t fieldCount);
 void SPDestroyRecord(SPRecordId id, SPRecordSet *rs);
 SPRecordSet *SPCreateRecordSet(SPNamespace *ns);
 void SPDestroyRecordSet(SPRecordSet *rs);
-SPRecordId *SPRecordSetToArray(SPRecordSet *rs, int *len);
-SPRecordId *SPResultSetToArray(khash_t(SIDS) *set, int *len);
+SPRecordId *SPRecordSetToArray(SPRecordSet *rs, size_t *len);
+SPRecordId *SPResultSetToArray(khash_t(SIDS) *set, size_t *len);
 int SPDeleteRecord(RedisModuleCtx *ctx, SPNamespace *ns, const char *id);
 
 static inline int SPAcquirePackCont(SPRecordSet *rs, SPRecordId rid);
@@ -20,9 +20,10 @@ void SPSaveRecordSetToRDB(RedisModuleCtx *ctx, RedisModuleIO *io, SPRecordSet *r
 void SPRewriteRecordSetToAOF(RedisModuleCtx *ctx, RedisModuleString *key, RedisModuleIO *io, SPRecordSet *rs, SPNamespace *ns);
 
 int SpredisAddRecord_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+int SpredisStoreRecords_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int SpredisDeleteRecord_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 SPPerms SPCompositePermutationsForRecord(SPNamespace *ns, SPRecord *record, SPFieldDef *fd, SPFieldData *fields);
 
 char *SP_UNPACK_DOC(SPRecordSet *rs, SPRecordId rid, int lock);
-void SP_PACK_CONTAINER(RedisModuleCtx *ctx, SPRecordSet *rs, SPPackCont *pc, int lock);
+// void SP_PACK_CONTAINER(RedisModuleCtx *ctx, SPRecordSet *rs, SPPackCont *pc, int lock);
 #endif

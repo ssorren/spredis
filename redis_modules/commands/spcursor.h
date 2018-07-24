@@ -10,11 +10,12 @@ typedef struct _SPSortData {
 
 typedef struct _SPItem {
     SPRecord *record;
-    SPSortData *sortData;
+    SPPtrOrD_t *sortData;
 } SPItem;
 
 typedef struct _SPCursor {
     SPItem *items;
+    long long created;
     size_t count;
 } SPCursor;
 
@@ -23,4 +24,5 @@ void SpredisCursorInit();
 int SpredisDeleteCursor_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 int SpredisPrepareCursor_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 SPCursor *SPGetCursor(RedisModuleString *tname);
+long long SPOldestCursorTime();
 #endif

@@ -34,22 +34,26 @@ MODULE_OBJ = spredis.o
 MODULE_SO = spredis.so
 
 
-DEPS = 	$(TYPEDIR)/sptempresult.o $(TYPEDIR)/spset.o $(TYPEDIR)/spscore.o $(TYPEDIR)/splexscore.o $(TYPEDIR)/sphash.o $(TYPEDIR)/spscoreset.o\
+OFS = 	$(TYPEDIR)/sptempresult.o $(TYPEDIR)/spset.o $(TYPEDIR)/spscore.o $(TYPEDIR)/splexscore.o $(TYPEDIR)/sphash.o $(TYPEDIR)/spscoreset.o\
 		$(TYPEDIR)/spexpresolver.o $(TYPEDIR)/spgeo.o $(TYPEDIR)/spcomposite.o $(TYPEDIR)/spdocument.o $(TYPEDIR)/spnamespace.o $(TYPEDIR)/sprecordset.o\
 		$(COMDIR)/spfacet.o $(COMDIR)/spfacetrange.o $(COMDIR)/spmcsort.o $(COMDIR)/sprangestore.o $(COMDIR)/spcomprangestore.o $(COMDIR)/spcursor.o\
-		$(LIBDIR)/spsortapplicator.o $(LIBDIR)/thpool.o $(LIBDIR)/sp_parallelqueue.o $(LIBDIR)/kexpr.o $(LIBDIR)/geohash.o\
-		$(LIBDIR)/lz4.o 
+		
+		
 		# $(LIBDIR)/threadpool.o
-
+DEPS = 	$(LIBDIR)/kexpr.o $(LIBDIR)/geohash.o $(LIBDIR)/lz4.o $(LIBDIR)/spsortapplicator.o \
+		$(LIBDIR)/thpool.o $(LIBDIR)/sp_parallelqueue.o
 export
 
 all: $(MODULE_SO)
 
-$(MODULE_SO): $(MODULE_OBJ) $(DEPS) 
+$(MODULE_SO): $(MODULE_OBJ) $(OFS) $(DEPS) 
 	$(LD) $^ -o $@ $(SHOBJ_LDFLAGS) $(LDFLAGS)
 
 clean:
-	$(RM) $(MODULE_OBJ) $(MODULE_SO) $(DEPS)
+	$(RM) $(MODULE_OBJ) $(MODULE_SO) $(OFS)
+
+depclean:
+	$(RM) $(MODULE_OBJ) $(MODULE_SO) $(OFS) $(DEPS)
 
 
 
