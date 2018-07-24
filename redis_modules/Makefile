@@ -33,14 +33,14 @@ LIBDIR := lib
 MODULE_OBJ = spredis.o
 MODULE_SO = spredis.so
 
-
-OFS = 	$(TYPEDIR)/sptempresult.o $(TYPEDIR)/spset.o $(TYPEDIR)/spscore.o $(TYPEDIR)/splexscore.o $(TYPEDIR)/sphash.o $(TYPEDIR)/spscoreset.o\
-		$(TYPEDIR)/spexpresolver.o $(TYPEDIR)/spgeo.o $(TYPEDIR)/spcomposite.o $(TYPEDIR)/spdocument.o $(TYPEDIR)/spnamespace.o $(TYPEDIR)/sprecordset.o\
-		$(COMDIR)/spfacet.o $(COMDIR)/spfacetrange.o $(COMDIR)/spmcsort.o $(COMDIR)/sprangestore.o $(COMDIR)/spcomprangestore.o $(COMDIR)/spcursor.o\
+#$(TYPEDIR)/sptempresult.o $(COMDIR)/spmcsort.o $(TYPEDIR)/spdocument.o $(TYPEDIR)/sphash.o $(TYPEDIR)/spexpresolver.o
+OFS = 	$(TYPEDIR)/spset.o $(TYPEDIR)/spscore.o $(TYPEDIR)/splexscore.o $(TYPEDIR)/spscoreset.o\
+		$(TYPEDIR)/spgeo.o $(TYPEDIR)/spcomposite.o  $(TYPEDIR)/spnamespace.o $(TYPEDIR)/sprecordset.o\
+		$(COMDIR)/spfacet.o $(COMDIR)/spfacetrange.o $(COMDIR)/sprangestore.o $(COMDIR)/spcomprangestore.o $(COMDIR)/spcursor.o\
 		
 		
 		# $(LIBDIR)/threadpool.o
-DEPS = 	$(LIBDIR)/kexpr.o $(LIBDIR)/geohash.o $(LIBDIR)/lz4.o $(LIBDIR)/spsortapplicator.o \
+DEPS = 	$(LIBDIR)/kexpr.o $(LIBDIR)/geohash.o $(LIBDIR)/lz4.o \
 		$(LIBDIR)/thpool.o $(LIBDIR)/sp_parallelqueue.o
 export
 

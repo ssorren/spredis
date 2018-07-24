@@ -349,8 +349,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     SpredisCursorInit();
 
 
-    SpredisTempResultModuleInit();
-    SpredisZsetMultiKeySortInit();
+    // SpredisTempResultModuleInit();
+    // SpredisZsetMultiKeySortInit();
     SpredisFacetInit();
     SPStoreRangeInit();
     // SPSetCommandInit();
@@ -362,14 +362,14 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     pthread_mutex_init ( &SP_GRW_LOCK, &SP_GRW_attr);
     SP_PQ_POOL = sp_pq_init(SP_PQ_POOL_SIZE, SP_PQ_TCOUNT_SIZE);
 
-    SpredisLog(ctx, "SPREDIS_MEMORIES initialized (bleep bleep, blorp blorp, pew pew)\n");
+    SpredisLog(ctx, "SPREDIS_MEMORIES initialized (bleep bleep, blorp blorp, pew pew)");
     
     // for (int j = 0; j < argc; j++) {
     //     const char *s = RedisModule_StringPtrLen(argv[j],NULL);
     //     SpredisLog(ctx, "Module loaded with ARGV[%d] = %s\n", j, s);
     // }
 
-    if (SpredisInitDocumentCommands(ctx) != REDISMODULE_OK) return REDISMODULE_ERR;
+    // if (SpredisInitDocumentCommands(ctx) != REDISMODULE_OK) return REDISMODULE_ERR;
     
     if (RedisModule_CreateCommand(ctx,"spredis.definenamespace",
         SpredisDefineNamespace_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
@@ -420,9 +420,9 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
 
     
-    if (RedisModule_CreateCommand(ctx,"spredis.sort",
-        SpredisZsetMultiKeySort_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.sort",
+    //     SpredisZsetMultiKeySort_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
 
     if (RedisModule_CreateCommand(ctx,"spredis.facets",
@@ -434,21 +434,21 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
     
     
-    if (RedisModule_CreateCommand(ctx,"spredis.getresids",
-        SpredisTMPResGetIds_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.getresids",
+    //     SpredisTMPResGetIds_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.getresdocs",
-        SpredisTMPResGetDocs_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.getresdocs",
+    //     SpredisTMPResGetDocs_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.setgeoresolver",
-        SpredisSetGeoResolver_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.setgeoresolver",
+    //     SpredisSetGeoResolver_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
     
-    if (RedisModule_CreateCommand(ctx,"spredis.resolveexpr",
-        SpredisExprResolve_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.resolveexpr",
+    //     SpredisExprResolve_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
 
     /* type commands */
@@ -486,9 +486,9 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     //     SpredisZSetRem_RedisCommand,"write",0,0,0) == REDISMODULE_ERR)
     //     return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx,"spredis.zcard",
-        SpredisZSetCard_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
-        return REDISMODULE_ERR;
+    // if (RedisModule_CreateCommand(ctx,"spredis.zcard",
+    //     SpredisZSetCard_RedisCommand,"readonly",0,0,0) == REDISMODULE_ERR)
+    //     return REDISMODULE_ERR;
 
 
     // if (RedisModule_CreateCommand(ctx,"spredis.zladd",
@@ -598,16 +598,16 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
 
     
-    RedisModuleTypeMethods rm = {
-        .version = REDISMODULE_TYPE_METHOD_VERSION,
-        .rdb_load = SpredisTMPResRDBLoad,
-        .rdb_save = SpredisTMPResDBSave,
-        .aof_rewrite = SpredisTMPResRewriteFunc,
-        .free = SpredisTMPResFreeCallback
-    };
+    // RedisModuleTypeMethods rm = {
+    //     .version = REDISMODULE_TYPE_METHOD_VERSION,
+    //     .rdb_load = SpredisTMPResRDBLoad,
+    //     .rdb_save = SpredisTMPResDBSave,
+    //     .aof_rewrite = SpredisTMPResRewriteFunc,
+    //     .free = SpredisTMPResFreeCallback
+    // };
 
-    SPREDISMODULE_TYPES[SPTMPRESTYPE] = RedisModule_CreateDataType(ctx, "Sp_TMPRSS",
-        SPREDISDHASH_ENCODING_VERSION, &rm);
+    // SPREDISMODULE_TYPES[SPTMPRESTYPE] = RedisModule_CreateDataType(ctx, "Sp_TMPRSS",
+    //     SPREDISDHASH_ENCODING_VERSION, &rm);
 
 
     // RedisModuleTypeMethods stm = {
@@ -685,19 +685,19 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     // if (SPREDISMODULE_TYPES[SPGEOTYPE] == NULL) return REDISMODULE_ERR;
 
-    RedisModuleTypeMethods etm = {
-        .version = REDISMODULE_TYPE_METHOD_VERSION,
-        .rdb_load = SpredisExpRslvrRDBLoad,
-        .rdb_save = SpredisExpRslvrDBSave,
-        .aof_rewrite = SpredisExpRslvrRewriteFunc,
-        .free = SpredisExpRslvrFreeCallback
-    };
+    // RedisModuleTypeMethods etm = {
+    //     .version = REDISMODULE_TYPE_METHOD_VERSION,
+    //     .rdb_load = SpredisExpRslvrRDBLoad,
+    //     .rdb_save = SpredisExpRslvrDBSave,
+    //     .aof_rewrite = SpredisExpRslvrRewriteFunc,
+    //     .free = SpredisExpRslvrFreeCallback
+    // };
 
-    SPREDISMODULE_TYPES[SPEXPRTYPE] = RedisModule_CreateDataType(ctx, "EsRvSZTSS",
-        SPREDISDHASH_ENCODING_VERSION, &etm);
+    // SPREDISMODULE_TYPES[SPEXPRTYPE] = RedisModule_CreateDataType(ctx, "EsRvSZTSS",
+    //     SPREDISDHASH_ENCODING_VERSION, &etm);
 
 
-    if (SPREDISMODULE_TYPES[SPEXPRTYPE] == NULL) return REDISMODULE_ERR;
+    // if (SPREDISMODULE_TYPES[SPEXPRTYPE] == NULL) return REDISMODULE_ERR;
 
 
     // RedisModuleTypeMethods dtm = {

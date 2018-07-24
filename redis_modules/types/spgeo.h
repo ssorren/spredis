@@ -20,18 +20,18 @@ typedef struct _SPGeoSearchAreas {
 
 // int SPLexScoreComp(SPScoreKey a, SPScoreKey b);
 
-SPScoreCont *SPGeoScoreContInit();
-void SPGeoScoreContDestroy(void *cont);
-void SpredisZGeoSetRDBSave(RedisModuleIO *io, void *ptr);
-void SpredisZGeoSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value);
-void *SpredisZGeoSetRDBLoad(RedisModuleIO *io, int encver);
-void SpredisZGeoSetFreeCallback(void *value);
-int SPGeoScorePutValue(SPScoreCont *cont, spid_t id, uint16_t pos, double lat, double lon);
-int SPGeoScoreDel(SPScoreCont *cont, spid_t id, double lat, double lon);
-int SpredisZGeoSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
-int SpredisZGeoSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
-int SpredisZGeoSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
-int SpredisZGeoSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+// SPScoreCont *SPGeoScoreContInit();
+// void SPGeoScoreContDestroy(void *cont);
+// void SpredisZGeoSetRDBSave(RedisModuleIO *io, void *ptr);
+// void SpredisZGeoSetRewriteFunc(RedisModuleIO *aof, RedisModuleString *key, void *value);
+// void *SpredisZGeoSetRDBLoad(RedisModuleIO *io, int encver);
+// void SpredisZGeoSetFreeCallback(void *value);
+// int SPGeoScorePutValue(SPScoreCont *cont, spid_t id, uint16_t pos, double lat, double lon);
+// int SPGeoScoreDel(SPScoreCont *cont, spid_t id, double lat, double lon);
+// int SpredisZGeoSetAdd_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+// int SpredisZGeoSetScore_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+// int SpredisZGeoSetRem_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
+// int SpredisZGeoSetCard_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc);
 
 
 uint64_t SPGeoHashEncode(double lat, double lng);

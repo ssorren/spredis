@@ -442,7 +442,7 @@ int SpredisPrepareCursor_RedisCommandT(RedisModuleCtx *ctx, RedisModuleString **
 						if (!comp(*a.sortData, *b.sortData)) break;
 						newEnd++;
 					}
-					SPResolveSortValues(cursor->count, cursor->items, &sctx, DOSPResolveMCResumeSortValues);
+					SPResolveSortValues(newEnd - newStart, cursor->items + newStart, &sctx, DOSPResolveMCResumeSortValues);
 					SpredisMCItemSort(newEnd - newStart, cursor->items + newStart, &sctx);
 
 

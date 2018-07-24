@@ -1,42 +1,6 @@
 #include "../spredis.h"
 
 
-// typedef struct {
-//     RedisModuleBlockedClient *bc;
-//     int argc, stripEmpties, includeStore;
-//     RedisModuleString **argv;
-//     SpredisSetCont * (*command)(SpredisSetCont **, int);
-// } SPSetTarg;
-
-void * _SpredisInitSet() {
-
-    SpredisSetCont *cont = RedisModule_Calloc(1, sizeof(SpredisSetCont));
-    cont->mutex = (pthread_rwlock_t)PTHREAD_RWLOCK_INITIALIZER;
-    pthread_rwlock_init ( &(cont->mutex),NULL );
-    cont->linkedSet = 0;
-    cont->set = kh_init(SIDS);
-    return cont;
-}
-
-void * _SpredisInitWithLinkedSet(khash_t(SIDS) *s, pthread_rwlock_t mutex) {
-
-    SpredisSetCont *cont = RedisModule_Calloc(1, sizeof(SpredisSetCont));
-    cont->mutex = mutex;
-    cont->linkedSet = 1;
-    cont->set = s;
-    return cont;
-}
-
-// int SPThreadedSetReply(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
-// {
-//     return REDISMODULE_OK;
-// }
-
-// void SPThreadedSetReplyFree(void *arg)
-// {
-//     RedisModule_Free(arg);
-// }
-
 typedef khash_t(SIDS) SPSortableSet;
 static inline int SpredisSetLenCompareLT(SPSortableSet *a, SPSortableSet *b, void *mcd) {
     return kh_size(a) < kh_size(b);
@@ -93,7 +57,7 @@ static khash_t(SIDS) *SpredisSDifference(khash_t(SIDS) **cas, int count) {
     spid_t id;
     // khint_t bk;
     int absent, add;
-    res = _SpredisInitSet();
+    // res = _SpredisInitSet();
     
     kh_foreach_key(ca, id, {
         add = 1;

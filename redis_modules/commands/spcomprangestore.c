@@ -9,7 +9,7 @@ typedef struct  _SPCompGeoData {
 	SPGeoHashArea area;
 	double lat, lon, radius;
 	uint8_t hasFieldQuery;
-	SPScoreCont *fieldCont;
+	// SPScoreCont *fieldCont;
 	RedisModuleString *unit, *radiusField;
 } SPCompGeoData;
 

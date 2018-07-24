@@ -130,23 +130,14 @@ const char *SPUniqStr(const char *str);
 #include "types/spset.h"
 #include "types/spscore.h"
 #include "types/splexscore.h"
-#include "types/sphash.h"
-#include "types/spexpresolver.h"
 #include "commands/spcomprangestore.h"
-#include "commands/spmcsort.h"
 #include "commands/sprangestore.h"
 #include "commands/spfacet.h"
 #include "commands/spfacetrange.h"
-#include "types/sptempresult.h"
-#include "types/spdocument.h"
-
-
 #include "types/spnamespace.h"
 #include "types/sprecordset.h"
 #include "commands/spcursor.h"
 
-
-#include "lib/spsortapplicator.h"
 
 
 
