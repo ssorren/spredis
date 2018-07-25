@@ -7,9 +7,11 @@
 #include "../lib/kvec.h"
 #include "../lib/lz4.h"
 
-#define SPScoreSetComp(a,b) kb_generic_cmp(((a).value.asDouble), ((b).value.asDouble))
-#define SPGeoSetComp(a,b)  kb_generic_cmp(((a).value.asUInt), ((b).value.asUInt))
-#define SPLexSetComp(a,b)  kb_str_cmp(((a).value.asChar), ((b).value.asChar))
+#define SPScoreSetComp(a,b) (((a).value.asDouble < (b).value.asDouble) ? -1 : ((a).value.asDouble > (b).value.asDouble))
+// kb_generic_cmp(((a).value.asDouble), ((b).value.asDouble))
+#define SPGeoSetComp(a,b)  (((a).value.asUInt < (b).value.asUInt) ? -1 : ((a).value.asUInt > (b).value.asUInt))
+// kb_generic_cmp(((a).value.asUInt), ((b).value.asUInt))
+#define SPLexSetComp(a,b)  (strcmp(((a).value.asChar), ((b).value.asChar)))
 
 
 typedef uint8_t SPHashValueType;
@@ -25,18 +27,18 @@ typedef union _SPPtrOrD_t {
 
 typedef kvec_t(SPPtrOrD_t) SPPtrOrD;
 
-typedef struct _SPScore {
-    spid_t id;
-    double score;
-    char *lex;
-    struct _SPScore *next, *prev;
-} SPScore;
+// typedef struct _SPScore {
+//     spid_t id;
+//     double score;
+//     char *lex;
+//     struct _SPScore *next, *prev;
+// } SPScore;
 
-typedef struct _SPScoreKey {
-	spid_t id;
-    SPPtrOrD_t score;
-    void *value;
-} SPScoreKey;
+// typedef struct _SPScoreKey {
+// 	spid_t id;
+//     SPPtrOrD_t score;
+//     void *value;
+// } SPScoreKey;
 
 
 #define SPGeoExpType 0
@@ -45,16 +47,16 @@ typedef struct _SPScoreKey {
 #define SPHashStringType 0
 #define SPHashDoubleType 1
 
-typedef struct _SPHashValue {
-	spid_t id;
-	SPHashValueType type;
-	kvec_t(char) used;
-    SPPtrOrD values;
-    struct _SPHashValue *next, *prev;
-} SPHashValue;
+// typedef struct _SPHashValue {
+// 	spid_t id;
+// 	SPHashValueType type;
+// 	kvec_t(char) used;
+//     SPPtrOrD values;
+//     struct _SPHashValue *next, *prev;
+// } SPHashValue;
 
 KHASH_DECLARE_SET(SIDS, spid_t);
-KHASH_DECLARE(SCORE, spid_t, SPScore*);
+// KHASH_DECLARE(SCORE, spid_t, SPScore*);
 
 typedef struct _SPScoreSetMembers {
     SPPtrOrD_t score;
@@ -63,8 +65,8 @@ typedef struct _SPScoreSetMembers {
 
 #include "./spset.h"
 
-KHASH_DECLARE(SORTTRACK, spid_t, SPScoreSetMembers*);
-KHASH_MAP_INIT_INT64(SORTTRACK, SPScoreSetMembers*);
+// KHASH_DECLARE(SORTTRACK, spid_t, SPScoreSetMembers*);
+// KHASH_MAP_INIT_INT64(SORTTRACK, SPScoreSetMembers*);
 
 typedef struct _SPScoreSetKey
 {
@@ -102,13 +104,13 @@ typedef struct _SPCompositeScoreCont {
 
 
 
-typedef khash_t(SCORE) khash_t(LEX);
+// typedef khash_t(SCORE) khash_t(LEX);
 
-KHASH_DECLARE(HASH, spid_t, SPHashValue*);
-KHASH_MAP_INIT_INT64(HASH, SPHashValue*);
+// KHASH_DECLARE(HASH, spid_t, SPHashValue*);
+// KHASH_MAP_INIT_INT64(HASH, SPHashValue*);
 KHASH_SET_INIT_INT64(SIDS);
-KHASH_MAP_INIT_INT64(SCORE, SPScore*);
-KHASH_MAP_INIT_INT64(LEX, SPScore*);
+// KHASH_MAP_INIT_INT64(SCORE, SPScore*);
+// KHASH_MAP_INIT_INT64(LEX, SPScore*);
 
 
 KB_TYPE(SCORESET);

@@ -519,7 +519,6 @@ int SPDeleteRecord(RedisModuleCtx *ctx, SPNamespace *ns, const char *id) {
 			rid.record->pc = NULL;
 			rec->exists = 0;
 			kh_del(MSTDOC, rs->docs, k);
-
 			SPDoUnIndexFields(ns, rid, rid.record->fields);
 			RedisModule_Free(rid.record->fields);
 			rid.record->fields = NULL;
@@ -1092,7 +1091,7 @@ int SpredisAddRecord_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
 		arg->tfdata = tfdata;
 		arg->ns = ns;
 		// SPReadLock(ns->lock);
-		SPDoWorkInThreadPool(SPDoIndexingWork, arg);
+		SPDoWorkInThreadPoolAndWaitForStart(SPDoIndexingWork, arg);
 		
 	} else {
 		kh_destroy(FIELDDATA, tfdata);

@@ -321,7 +321,7 @@ void SPAddDoubleToIndex(SPRecordId rid, SPFieldData *data, SPFieldDef *fd, SPNam
 	SPWriteLock(cont->lock);
 	for (int i = 0; i < data->ilen; ++i)
 	{
-		SPAddScoreToSet(cont->index.btree, NULL, rid.id, data->iv[i]);
+		SPAddScoreToSet(cont->index.btree, rid.id, data->iv[i]);
 	}
 
 	SPWriteUnlock(cont->lock);
@@ -335,7 +335,7 @@ void SPRemDoubleFromIndex(SPRecordId rid, SPFieldData *data, SPFieldDef *fd, SPN
 	SPWriteLock(cont->lock);
 	for (int i = 0; i < data->ilen; ++i)
 	{
-		SPRemScoreFromSet(cont->index.btree, NULL, rid.id, data->iv[i]);
+		SPRemScoreFromSet(cont->index.btree, rid.id, data->iv[i]);
 	}
 	SPWriteUnlock(cont->lock);
 }
@@ -348,7 +348,7 @@ void SPAddGeoToIndex(SPRecordId rid, SPFieldData *data, SPFieldDef *fd, SPNamesp
 	SPWriteLock(cont->lock);
 	for (int i = 0; i < data->ilen; ++i)
 	{
-		SPAddGeoScoreToSet(cont->index.btree, NULL, rid.id, data->iv[i]);
+		SPAddGeoScoreToSet(cont->index.btree, rid.id, data->iv[i]);
 	}
 	
 	SPWriteUnlock(cont->lock);
@@ -362,7 +362,7 @@ void SPRemGeoFromIndex(SPRecordId rid, SPFieldData *data, SPFieldDef *fd, SPName
 	SPWriteLock(cont->lock);
 	for (int i = 0; i < data->ilen; ++i)
 	{
-		SPRemGeoScoreFromSet(cont->index.btree, NULL, rid.id, data->iv[i]);
+		SPRemGeoScoreFromSet(cont->index.btree, rid.id, data->iv[i]);
 	}
 	
 	SPWriteUnlock(cont->lock);
@@ -378,7 +378,7 @@ void SPAddLexToIndex(SPRecordId rid, SPFieldData *data, SPFieldDef *fd, SPNamesp
 	{
 		
 		if (data->iv) {
-			SPAddLexScoreToSet(cont->index.btree, NULL, rid.id, data->iv[i], NULL);
+			SPAddLexScoreToSet(cont->index.btree, rid.id, data->iv[i]);
 		} else {
 			printf("WTF2\n");
 		}
@@ -395,7 +395,7 @@ void SPRemLexFromIndex(SPRecordId rid, SPFieldData *data, SPFieldDef *fd, SPName
 	SPWriteLock(cont->lock);
 	for (int i = 0; i < data->ilen; ++i)
 	{
-		SPRemLexScoreFromSet(cont->index.btree, NULL, rid.id, data->iv[i]);
+		SPRemLexScoreFromSet(cont->index.btree, rid.id, data->iv[i]);
 	}
 	
 	SPWriteUnlock(cont->lock);
@@ -1255,8 +1255,13 @@ int SpredisDefineNamespace_RedisCommand(RedisModuleCtx *ctx, RedisModuleString *
 		SPFieldDefVec adds, updates, deletes, same;
 		kv_init(adds), kv_init(updates), kv_init(deletes), kv_init(same);
 
-		// printf("New fields %zu\n", kv_size(newDefs));
-		// printf("New composites %zu\n", kv_size(newCompDefs));
+
+		/*
+			STOP THE WORLD!
+		*/
+		SPWriteLock(ns->rs->lock);
+		SPWriteLock(ns->rs->deleteLock);
+		SPWriteLock(ns->rs->lzwLock);
 
 		for (size_t i = 0; i < kv_size(newDefs); ++i)
 		{
@@ -1336,9 +1341,7 @@ int SpredisDefineNamespace_RedisCommand(RedisModuleCtx *ctx, RedisModuleString *
 		ks_introsort(str, kv_size(ns->fields), ns->fields.a);
 		ks_introsort(str, kv_size(ns->composites), ns->composites.a);
 
-		// for (size_t i = 0; i < kv_size(ns->fields); ++i) {
-		// 	printf("CreateDef %s\n", kv_A(ns->fields, i));
-		// }
+		//TODO: manage record set changes
 		//TODO: manage index changes
 		RedisModule_ReplyWithString(ctx, RedisModule_CreateStringPrintf(ctx, "{\"adds\":%zu, \"deletes\":%zu, \"updates\":%zu, \"same\":%zu}", kv_size(adds), kv_size(deletes), kv_size(updates), kv_size(same)));
 
@@ -1349,6 +1352,16 @@ int SpredisDefineNamespace_RedisCommand(RedisModuleCtx *ctx, RedisModuleString *
 		kh_destroy(FIELDS, oldDefs);
 
 		kv_destroy(newDefs), kv_destroy(newCompDefs), kv_destroy(adds), kv_destroy(updates), kv_destroy(deletes), kv_init(same);
+
+
+		/*
+			RELEASE THE WORLD
+		*/
+		SPWriteUnlock(ns->rs->lzwLock);
+		SPWriteUnlock(ns->rs->deleteLock);
+		SPWriteUnlock(ns->rs->lock);
+		
+		
 	}
 	/*
 	fd->name = 0

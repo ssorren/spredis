@@ -73,7 +73,7 @@ threadpool thpool_init(int num_threads);
  */
 int thpool_add_work(threadpool, void (*function_p)(void*), void* arg_p);
 threadpool_job *thpool_get_job(threadpool, void (*function_p)(void*), void* arg_p);
-
+void thpool_addjob(threadpool, threadpool_job *job);
 /**
  * @brief Wait for all queued jobs to finish
  *

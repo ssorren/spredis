@@ -12,7 +12,7 @@
     SP_FREE_SCORESET_KEY(key)
 
 
-#define SP_DOADD_SCORESET_PTR(type, ss, st, id, value, resort) { \
+#define SP_DOADD_SCORESET_PTR(type, ss, id, value) { \
     SPScoreSetKey ___search = {.value = (value)}; \
     SPScoreSetKey *___key = kb_getp(type, ss, &___search); \
     int absent; \
@@ -23,17 +23,12 @@
         __create.members = RedisModule_Calloc(1, sizeof(SPScoreSetMembers)); \
         __create.members->set = kh_init(SIDS); \
         __create.members->score.asDouble = DBL_MIN; /* score will be added later on apply sort */ \
-        if (resort != NULL) *(resort) = 1; \
         ___key = kb_putp(type, ss, &__create); \
     } else if (resort != NULL) { *(resort) = 0; } \
     kh_put(SIDS, ___key->members->set, (id), &absent); \
-    if (st != NULL) { \
-        khint_t ___k = kh_put(SORTTRACK, (st), (id), &absent);\
-        kh_value((st), ___k) = ___key->members; \
-    } \
 }
 
-#define SP_DOADD_SCORESET_AUX(type, ss, st, id, value) { \
+#define SP_DOADD_SCORESET_AUX(type, ss, id, value) { \
     SPScoreSetKey ___search = {.value = (value)}; \
     SPScoreSetKey *___key = kb_getp(type, ss, &___search); \
     int absent; \
@@ -48,9 +43,9 @@
 
 
 
-#define SP_DOADD_SCORESET(type, ss, st, id, value) SP_DOADD_SCORESET_AUX(type, ss, st, id, value)
+#define SP_DOADD_SCORESET(type, ss, id, value) SP_DOADD_SCORESET_AUX(type, ss, id, value)
 // #define SP_DOADD_LEXSET(type, ss, st, id, value, vresort) SP_DOADD_SCORESET_PTR(type, ss, st, id, value, (int *)vresort)
-#define SP_DOADD_LEXSET(type, ss, st, id, value, vresort) SP_DOADD_SCORESET_AUX(type, ss, st, id, value)
+#define SP_DOADD_LEXSET(type, ss, id, value) SP_DOADD_SCORESET_AUX(type, ss, id, value)
 
 #define SP_DEL_SCORESET_KEY(key, search) \
         SPScoreSetMembers *___mems = (key)->members; \
@@ -79,7 +74,7 @@
             RedisModule_Free(___mems); \
         }
 
-#define SP_DOREM_SCORESET(type, ss, st, id, value) { \
+#define SP_DOREM_SCORESET(type, ss, id, value) { \
     SPScoreSetKey ___search = {.value = (value)}; \
     SPScoreSetKey *___key = kb_getp(type, ss, &___search); \
     if (___key != NULL) { \
@@ -94,34 +89,34 @@
     } \
 }
 
-void SPAddScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value)
+void SPAddScoreToSet(kbtree_t(SCORESET) *ss, spid_t id, SPPtrOrD_t value)
 {
-    SP_DOADD_SCORESET(SCORESET, ss, st, id, value);
+    SP_DOADD_SCORESET(SCORESET, ss, id, value);
 }
 
-void SPAddLexScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value, int *resort)
+void SPAddLexScoreToSet(kbtree_t(SCORESET) *ss, spid_t id, SPPtrOrD_t value)
 {
-    SP_DOADD_LEXSET(LEXSET, ss, st, id, value, resort);
+    SP_DOADD_LEXSET(LEXSET, ss, id, value);
 }
 
-void SPAddGeoScoreToSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value)
+void SPAddGeoScoreToSet(kbtree_t(SCORESET) *ss, spid_t id, SPPtrOrD_t value)
 {
-	SP_DOADD_SCORESET(GEOSET, ss, st, id, value);
+	SP_DOADD_SCORESET(GEOSET, ss, id, value);
 }
 
-void SPRemScoreFromSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value)
+void SPRemScoreFromSet(kbtree_t(SCORESET) *ss, spid_t id, SPPtrOrD_t value)
 {
-	SP_DOREM_SCORESET(SCORESET, ss, st, id, value);
+	SP_DOREM_SCORESET(SCORESET, ss, id, value);
 }
 
-void SPRemLexScoreFromSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value)
+void SPRemLexScoreFromSet(kbtree_t(SCORESET) *ss, spid_t id, SPPtrOrD_t value)
 {
-	SP_DOREM_SCORESET(LEXSET, ss, st, id, value);
+	SP_DOREM_SCORESET(LEXSET, ss, id, value);
 }
 
-void SPRemGeoScoreFromSet(kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st, spid_t id, SPPtrOrD_t value)
+void SPRemGeoScoreFromSet(kbtree_t(SCORESET) *ss, spid_t id, SPPtrOrD_t value)
 {
-	SP_DOREM_SCORESET(GEOSET, ss, st, id, value);
+	SP_DOREM_SCORESET(GEOSET, ss, id, value);
 }
 
 
@@ -216,7 +211,7 @@ void SPWriteGeoSetToRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss) {
 }
 
 
-void SPReadScoreSetFromRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st) {
+void SPReadScoreSetFromRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss) {
     size_t count = RedisModule_LoadUnsigned(io);
     for (size_t i = 0; i < count; ++i)
     {
@@ -225,12 +220,12 @@ void SPReadScoreSetFromRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss, khash_t(SO
         for (size_t k = 0; k < keyCount; ++k)
         {
             spid_t id = RedisModule_LoadUnsigned(io);
-            SPAddScoreToSet(ss, st, id, key);
+            SPAddScoreToSet(ss, id, key);
         }
     }
 }
 
-void SPReadLexSetFromRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st) {
+void SPReadLexSetFromRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss) {
     size_t count = RedisModule_LoadUnsigned(io);
     for (size_t i = 0; i < count; ++i)
     {
@@ -241,14 +236,14 @@ void SPReadLexSetFromRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss, khash_t(SORT
         for (size_t k = 0; k < keyCount; ++k)
         {
             spid_t id = RedisModule_LoadUnsigned(io);
-            SPAddLexScoreToSet(ss, st, id, key, (int *)NULL);
+            SPAddLexScoreToSet(ss, id, key);
         }
         RedisModule_FreeString(RedisModule_GetContextFromIO(io),s);
     }
 }
 
-void SPReadGeoSetFromRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss, khash_t(SORTTRACK) *st) {
-    SPReadScoreSetFromRDB(io, ss, st);
+void SPReadGeoSetFromRDB(RedisModuleIO *io, kbtree_t(SCORESET) *ss) {
+    SPReadScoreSetFromRDB(io, ss);
 }
 
 

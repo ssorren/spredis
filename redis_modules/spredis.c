@@ -178,7 +178,10 @@ int SPDoWorkInThreadPool(void *func, void *arg) {
 int SPDoWorkInThreadPoolAndWaitForStart(void *func, void *arg) {
     threadpool_job *job = thpool_get_job(SP_GENERIC_WORKER_POOL, func, arg);
     if (job == NULL) return -1;
+    pthread_mutex_lock(&job->mutex);
+    thpool_addjob(SP_GENERIC_WORKER_POOL, job);
     pthread_cond_wait(&job->cond, &job->mutex);
+    pthread_mutex_unlock(&job->mutex);
     // pthread_t tid;
     // pthread_create(&tid,NULL,func,arg);
     // return pthread_detach(tid);

@@ -217,11 +217,14 @@ threadpool_job *thpool_get_job(thpool_* thpool_p, void (*function_p)(void*), voi
 	pthread_cond_init(&newjob->cond, NULL);
 
 	/* add job to queue */
-	jobqueue_push(&thpool_p->jobqueue, newjob);
+	// jobqueue_push(&thpool_p->jobqueue, newjob);
 
 	return (threadpool_job*)newjob;
 }
 
+void thpool_addjob(thpool_* thpool_p, threadpool_job *newjob) {
+	jobqueue_push(&thpool_p->jobqueue, (job*)newjob);	
+}
 /* Wait until all jobs have finished */
 void thpool_wait(thpool_* thpool_p){
 	pthread_mutex_lock(&thpool_p->thcount_lock);
@@ -390,13 +393,17 @@ static void* thread_do(struct thread* thread_p){
 			void*  arg_buff;
 			job* job_p = jobqueue_pull(&thpool_p->jobqueue);
 			if (job_p) {
+				pthread_mutex_lock(&job_p->mutex);
 				pthread_cond_signal(&job_p->cond);
+				pthread_mutex_unlock(&job_p->mutex);
+
 				func_buff = job_p->function;
 				arg_buff  = job_p->arg;
 				func_buff(arg_buff);
 
 				pthread_mutex_destroy(&job_p->mutex);
 				pthread_cond_destroy(&job_p->cond);
+
 				RedisModule_Free(job_p);
 			}
 
