@@ -6,6 +6,7 @@
 #include <float.h>
 #include <math.h>
 
+
 #include "spredis.h" //important that this coes before khash-- defines memory functions
 #include "lib/ksort.h"
 #include "types/spsharedtypes.h"
@@ -817,6 +818,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     
     printf("Size of rid=%lu, record=%lu, IndexType=%lu\n", sizeof(SPRecordId), sizeof(SPRecord), sizeof(IndexStatus));
     */
+    // printf("%s\n", DB_VERSION_STRING);
     return REDISMODULE_OK;
 }
 

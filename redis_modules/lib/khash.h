@@ -236,6 +236,23 @@ static const double __ac_HASH_UPPER = 0.77;
 	} \
 }
 
+#define kh_dup_map(khkey_t, khval_t, dst, src) { \
+	if (src != NULL && dst != NULL) { \
+		dst->n_buckets = src->n_buckets; \
+		dst->size = src->size; \
+		dst->n_occupied = src->n_occupied; \
+		dst->upper_bound = src->upper_bound; \
+		if (dst->flags) kfree(dst->flags); \
+		if (dst->keys) kfree(dst->keys); \
+		dst->flags = kmalloc(__ac_fsize(src->n_buckets) * sizeof(khint32_t) ); \
+		dst->keys = kmalloc(src->n_buckets * sizeof(khkey_t)); \
+		dst->vals = kmalloc(src->n_buckets * sizeof(khval_t)); \
+		memcpy(dst->flags, src->flags, __ac_fsize(src->n_buckets) * sizeof(khint32_t)); \
+		memcpy(dst->keys, src->keys, src->n_buckets * sizeof(khkey_t)); \
+		memcpy(dst->vals, src->vals, src->n_buckets * sizeof(khval_t)); \
+	} \
+}
+
 #define __KHASH_PROTOTYPES(name, khkey_t, khval_t)	 					\
 	extern kh_##name##_t *kh_init_##name(void);							\
 	extern void kh_destroy_##name(kh_##name##_t *h);					\

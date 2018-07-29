@@ -6,6 +6,7 @@
 #include "../lib/sp_kbtree.h"
 #include "../lib/kvec.h"
 #include "../lib/lz4.h"
+// #include <db.h>
 
 #define SPScoreSetComp(a,b) (((a).value.asDouble < (b).value.asDouble) ? -1 : ((a).value.asDouble > (b).value.asDouble))
 // kb_generic_cmp(((a).value.asDouble), ((b).value.asDouble))
@@ -332,6 +333,7 @@ typedef struct _SPRecordSet {
     pthread_t deleteThread;
     int delrun;
     SPPackContVec packStack;
+    // DB *ldb;
 } SPRecordSet;
 
 KHASH_DECLARE_SET(STR, const char *);
